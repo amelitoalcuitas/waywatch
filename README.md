@@ -29,7 +29,7 @@ Markers are **temporary and automatically expire** with a scheduled cleanup week
 - Marker clustering when zoomed out
 - Tap marker to view details
 - Filter markers by category
-- Filter markers by **date range** (new feature)
+- Filter markers by **date range**
 
 ---
 
@@ -400,8 +400,10 @@ Tasks:
 Example cron job:
 
 ```
-* * * * 0 php artisan schedule:run   # Runs weekly
+* * * * * php artisan schedule:run
 ```
+
+> Note: The above runs every minute (required by Laravel Scheduler). Laravel internally determines which scheduled tasks are due. The actual cleanup job is scheduled weekly inside `app/Console/Kernel.php`.
 
 ---
 
@@ -431,7 +433,7 @@ Required protections:
 
 # Deployment
 
-The application should be deployable on a **single VPS**.
+The application should be deployable on a **single VPS** or via **Docker Compose** (recommended).
 
 Recommended stack:
 
@@ -444,6 +446,295 @@ Redis (optional)
 ```
 
 Images should be stored in **external object storage**.
+
+---
+
+# Docker Setup
+
+WayWatch is fully containerized using **Docker Compose**, making local development and VPS deployment consistent and reproducible.
+
+---
+
+## Recommended Services
+
+```
+waywatch/
+├── docker/
+│   ├── nginx/
+│   │   └── default.conf        # Nginx reverse proxy config
+│   ├── php/
+│   │   └── Dockerfile          # Laravel PHP-FPM container
+│   └── node/
+│       └── Dockerfile          # Nuxt 3 SSR container
+├── docker-compose.yml
+└── docker-compose.prod.yml     # Production overrides
+```
+
+---
+
+## docker-compose.yml (Development)
+
+```yaml
+version: "3.9"
+
+services:
+
+  # ─── Nginx Reverse Proxy ───────────────────────────────
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - ./backend:/var/www/backend
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - waywatch
+
+  # ─── Laravel Backend (PHP-FPM) ─────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/php/Dockerfile
+    volumes:
+      - ./backend:/var/www/backend
+    environment:
+      APP_ENV: local
+      APP_KEY: ${APP_KEY}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      AWS_ENDPOINT: ${AWS_ENDPOINT}         # S3-compatible object storage
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_BUCKET: ${AWS_BUCKET}
+    depends_on:
+      - db
+      - redis
+    networks:
+      - waywatch
+
+  # ─── Nuxt 3 Frontend ───────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/node/Dockerfile
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      NUXT_PUBLIC_API_BASE: http://nginx/api
+    depends_on:
+      - backend
+    networks:
+      - waywatch
+
+  # ─── PostgreSQL Database ───────────────────────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - waywatch
+
+  # ─── Redis (Queue & Cache) ─────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - waywatch
+
+  # ─── Laravel Queue Worker ──────────────────────────────
+  queue:
+    build:
+      context: ./backend
+      dockerfile: ../docker/php/Dockerfile
+    command: php artisan queue:work --sleep=3 --tries=3
+    volumes:
+      - ./backend:/var/www/backend
+    environment:
+      DB_HOST: db
+      REDIS_HOST: redis
+    depends_on:
+      - db
+      - redis
+    networks:
+      - waywatch
+
+  # ─── Laravel Scheduler (Weekly Cleanup) ────────────────
+  scheduler:
+    build:
+      context: ./backend
+      dockerfile: ../docker/php/Dockerfile
+    command: sh -c "while true; do php artisan schedule:run; sleep 60; done"
+    volumes:
+      - ./backend:/var/www/backend
+    environment:
+      DB_HOST: db
+      REDIS_HOST: redis
+    depends_on:
+      - db
+    networks:
+      - waywatch
+
+volumes:
+  db_data:
+  redis_data:
+
+networks:
+  waywatch:
+    driver: bridge
+```
+
+---
+
+## Service Summary
+
+| Service     | Image / Build         | Purpose                                      |
+|-------------|-----------------------|----------------------------------------------|
+| `nginx`     | `nginx:alpine`        | Reverse proxy, routes `/api` to backend, `/` to frontend |
+| `backend`   | Custom PHP-FPM        | Laravel REST API, authentication, marker logic |
+| `frontend`  | Custom Node           | Nuxt 3 SSR app serving the Vue + Leaflet map |
+| `db`        | `postgres:16-alpine`  | Primary data store (markers, users, votes)   |
+| `redis`     | `redis:7-alpine`      | Queue driver and optional response caching   |
+| `queue`     | Same as backend       | Processes background jobs (e.g., image cleanup) |
+| `scheduler` | Same as backend       | Runs Laravel Scheduler every 60s for weekly cleanup |
+
+---
+
+## Nginx Configuration (docker/nginx/default.conf)
+
+```nginx
+server {
+    listen 80;
+
+    # Forward API requests to Laravel
+    location /api/ {
+        proxy_pass http://backend:9000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # Forward everything else to Nuxt
+    location / {
+        proxy_pass http://frontend:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+> **Note:** Laravel runs PHP-FPM (port 9000), not a web server directly. Nginx handles HTTP and proxies `.php` requests through FastCGI if needed. Adjust to use `fastcgi_pass` instead of `proxy_pass` for a standard PHP-FPM setup.
+
+---
+
+## PHP Dockerfile (docker/php/Dockerfile)
+
+```dockerfile
+FROM php:8.3-fpm-alpine
+
+RUN apk add --no-cache \
+    postgresql-dev \
+    libpng-dev \
+    libzip-dev \
+    && docker-php-ext-install pdo pdo_pgsql zip gd
+
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+WORKDIR /var/www/backend
+COPY . .
+
+RUN composer install --no-dev --optimize-autoloader
+RUN php artisan config:cache && php artisan route:cache
+
+EXPOSE 9000
+CMD ["php-fpm"]
+```
+
+---
+
+## Node Dockerfile (docker/node/Dockerfile)
+
+```dockerfile
+FROM node:20-alpine
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+RUN npm run build
+
+EXPOSE 3000
+CMD ["node", ".output/server/index.mjs"]
+```
+
+---
+
+## Environment Variables (.env)
+
+```env
+APP_KEY=base64:...
+APP_ENV=local
+
+DB_DATABASE=waywatch
+DB_USERNAME=waywatch_user
+DB_PASSWORD=secret
+
+AWS_ENDPOINT=https://your-s3-compatible-endpoint
+AWS_ACCESS_KEY_ID=your-key
+AWS_SECRET_ACCESS_KEY=your-secret
+AWS_BUCKET=waywatch-images
+```
+
+---
+
+## Useful Docker Commands
+
+```bash
+# Start all services
+docker compose up -d
+
+# Run migrations
+docker compose exec backend php artisan migrate
+
+# Seed database
+docker compose exec backend php artisan db:seed
+
+# View logs
+docker compose logs -f backend
+
+# Run cleanup manually
+docker compose exec backend php artisan schedule:run
+
+# Stop everything
+docker compose down
+```
+
+---
+
+## Production Notes
+
+For production (`docker-compose.prod.yml`):
+
+- Remove volume mounts for source code (use `COPY` in Dockerfile instead)
+- Set `APP_ENV=production` and `APP_DEBUG=false`
+- Use external managed database (e.g., managed PostgreSQL) instead of the `db` container
+- Point `AWS_ENDPOINT` to your production S3-compatible bucket
+- Place Cloudflare in front of Nginx for CDN and DDoS protection
+- Use Docker secrets or a `.env` file excluded from version control for credentials
 
 ---
 
@@ -463,8 +754,6 @@ Future features like **route planning and directions** will build upon the exist
 ---
 
 # Project Folder Structure & Step-by-Step Build Plan
-
-This section is designed for coding agents to **implement the project in order**.
 
 ## Recommended Folder Structure
 
@@ -493,7 +782,16 @@ waywatch/
 │   │   └── register.vue
 │   └── plugins/
 │       └── leaflet.js
-├── storage/                  # Images (local fallback or staging)
+├── docker/                   # Docker configuration
+│   ├── nginx/
+│   │   └── default.conf
+│   ├── php/
+│   │   └── Dockerfile
+│   └── node/
+│       └── Dockerfile
+├── docker-compose.yml
+├── docker-compose.prod.yml
+├── .env.example
 ├── README.md
 └── package.json / composer.json
 ```
@@ -539,7 +837,7 @@ waywatch/
 2. Bottom navigation for mobile
 3. Prepare database and frontend hooks for future route/direction feature
 4. Test weekly cleanup and ensure historical markers can be analyzed via date filter
-5. Deploy backend and frontend to VPS with Nginx, configure Cloudflare CDN, and object storage
+5. Deploy using Docker Compose on VPS with Nginx, configure Cloudflare CDN, and object storage
 
 ---
 
