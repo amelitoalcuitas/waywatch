@@ -55,6 +55,7 @@ class MarkerController extends Controller
         $validated = $request->validate([
             'latitude' => ['required', 'numeric', 'between:-90,90'],
             'longitude' => ['required', 'numeric', 'between:-180,180'],
+            'address' => ['nullable', 'string', 'max:500'],
             'category' => ['required', 'string', Rule::in(Marker::CATEGORIES)],
             'description' => ['required', 'string', 'max:2000'],
             'images' => ['nullable', 'array', 'max:6'],
@@ -79,6 +80,7 @@ class MarkerController extends Controller
             'user_id' => $user->id,
             'latitude' => $validated['latitude'],
             'longitude' => $validated['longitude'],
+            'address' => $validated['address'] ?? null,
             'category' => $validated['category'],
             'description' => $validated['description'],
             'expires_at' => $expiresAt,

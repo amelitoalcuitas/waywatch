@@ -1,133 +1,102 @@
 <template>
-  <Teleport to="body">
-    <div
-      v-if="modelValue"
-      class="fixed inset-0 z-[1000] flex items-end justify-center sm:items-center"
-      @click.self="close"
+  <DefineFormTemplate>
+    <form
+      class="space-y-4"
+      @submit.prevent="onSubmit"
     >
-      <div
-        class="absolute inset-0 bg-black/50"
-        aria-hidden="true"
+      <UAlert
+        v-if="locationError"
+        color="error"
+        variant="soft"
+        :description="locationError"
       />
-      <div
-        class="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white shadow-xl sm:rounded-2xl"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="add-marker-title"
-      >
-        <div class="sticky top-0 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
-          <h2
-            id="add-marker-title"
-            class="text-lg font-semibold text-gray-900"
-          >
-            Add Report
-          </h2>
-          <button
-            type="button"
-            class="rounded p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-            aria-label="Close"
-            @click="close"
-          >
-            <svg
-              class="h-5 w-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
 
-        <form
-          class="space-y-4 p-4"
-          @submit.prevent="onSubmit"
-        >
-          <div
-            v-if="locationError"
-            class="rounded bg-red-50 p-3 text-sm text-red-700"
-          >
-            {{ locationError }}
-          </div>
-
-          <div v-if="!locationError && position">
-            <p class="text-xs text-gray-500">
-              Location: {{ position.lat.toFixed(5) }}, {{ position.lng.toFixed(5) }}
-            </p>
-          </div>
-
-          <div>
-            <label
-              for="category"
-              class="mb-1 block text-sm font-medium text-gray-700"
-            >
-              Category
-            </label>
-            <select
-              id="category"
-              v-model="category"
-              required
-              class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option
-                v-for="opt in categoryOptions"
-                :key="opt.value"
-                :value="opt.value"
-              >
-                {{ opt.label }}
-              </option>
-            </select>
-          </div>
-
-          <div>
-            <label
-              for="description"
-              class="mb-1 block text-sm font-medium text-gray-700"
-            >
-              Description
-            </label>
-            <textarea
-              id="description"
-              v-model="description"
-              required
-              maxlength="2000"
-              rows="4"
-              class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              placeholder="Describe the road condition or situation..."
-            />
-            <p class="mt-1 text-xs text-gray-500">
-              {{ description.length }} / 2000
-            </p>
-          </div>
-
-          <p
-            v-if="submitError"
-            class="text-sm text-red-600"
-          >
-            {{ submitError }}
-          </p>
-
-          <button
-            type="submit"
-            :disabled="submitting || !position || !!locationError"
-            class="w-full rounded bg-primary px-4 py-2 font-medium text-white hover:bg-primary/90 disabled:opacity-50"
-          >
-            {{ submitting ? 'Submitting...' : 'Submit Report' }}
-          </button>
-        </form>
+      <div v-if="!locationError && position">
+        <p class="text-xs text-muted">
+          Location: {{ address || (addressLoading ? 'Looking up address...' : `${position.lat.toFixed(5)}, ${position.lng.toFixed(5)}`) }}
+        </p>
       </div>
-    </div>
-  </Teleport>
+
+      <UFormField
+        label="Category"
+        name="category"
+        required
+      >
+        <USelect
+          v-model="category"
+          :items="categoryOptions"
+          placeholder="Select category"
+          class="w-full"
+        />
+      </UFormField>
+
+      <UFormField
+        label="Description"
+        name="description"
+        required
+        :help="`${description.length} / 2000`"
+      >
+        <UTextarea
+          v-model="description"
+          required
+          :maxlength="2000"
+          :rows="4"
+          placeholder="Describe the road condition or situation..."
+          class="w-full"
+        />
+      </UFormField>
+
+      <UAlert
+        v-if="submitError"
+        color="error"
+        variant="soft"
+        :description="submitError"
+      />
+
+      <UButton
+        type="submit"
+        block
+        :loading="submitting"
+        :disabled="!position || !!locationError"
+      >
+        {{ submitting ? 'Submitting...' : 'Submit Report' }}
+      </UButton>
+    </form>
+  </DefineFormTemplate>
+
+  <UModal
+    v-if="isDesktop"
+    v-model:open="open"
+    title="Add Report"
+    :ui="{ footer: 'justify-stretch' }"
+  >
+    <div class="hidden" />
+    <template #body>
+      <ReuseFormTemplate />
+    </template>
+  </UModal>
+
+  <UDrawer
+    v-else
+    v-model:open="open"
+    title="Add Report"
+    :ui="{ footer: 'justify-stretch' }"
+  >
+    <div class="hidden" />
+    <template #body>
+      <ReuseFormTemplate />
+    </template>
+  </UDrawer>
 </template>
 
 <script setup lang="ts">
+import { createReusableTemplate, useMediaQuery } from '@vueuse/core'
+import { reverseGeocode } from '~/composables/useGeocoding'
 import { CATEGORY_OPTIONS } from '~/composables/useMarkers'
 import type { Marker } from '~/composables/useMarkers'
+
+const [DefineFormTemplate, ReuseFormTemplate] = createReusableTemplate()
+const isDesktop = useMediaQuery('(min-width: 768px)')
 
 const categoryOptions = CATEGORY_OPTIONS.filter((o) => o.value !== 'all')
 
@@ -144,9 +113,16 @@ const emit = defineEmits<{
 const { apiFetch } = useApi()
 const authStore = useAuthStore()
 
+const open = computed({
+  get: () => props.modelValue,
+  set: (v) => emit('update:modelValue', v),
+})
+
 const category = ref('road_repair')
 const description = ref('')
 const position = ref<{ lat: number; lng: number } | null>(null)
+const address = ref<string | null>(null)
+const addressLoading = ref(false)
 const locationError = ref('')
 const submitError = ref('')
 const submitting = ref(false)
@@ -189,6 +165,7 @@ async function onSubmit() {
       body: {
         latitude: position.value.lat,
         longitude: position.value.lng,
+        address: address.value || undefined,
         category: category.value,
         description: description.value.trim(),
       },
@@ -214,17 +191,35 @@ async function onSubmit() {
   }
 }
 
+async function fetchAddress(lat: number, lng: number) {
+  address.value = null
+  addressLoading.value = true
+  try {
+    const result = await reverseGeocode(lat, lng)
+    address.value = result
+  } finally {
+    addressLoading.value = false
+  }
+}
+
 watch(
   () => props.modelValue,
   async (open) => {
     if (open) {
       position.value = null
+      address.value = null
+      addressLoading.value = false
       locationError.value = ''
       submitError.value = ''
       if (props.initialCoordinates) {
         position.value = props.initialCoordinates
+        await fetchAddress(props.initialCoordinates.lat, props.initialCoordinates.lng)
       } else {
-        position.value = await getLocation()
+        const coords = await getLocation()
+        position.value = coords
+        if (coords) {
+          await fetchAddress(coords.lat, coords.lng)
+        }
       }
     }
   }

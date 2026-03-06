@@ -12,6 +12,7 @@ class Marker extends Model
         'user_id',
         'latitude',
         'longitude',
+        'address',
         'category',
         'description',
         'likes',

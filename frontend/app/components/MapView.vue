@@ -106,11 +106,12 @@ function markersToClusterFormat(markers: Marker[]) {
 
   return markers.map((m) => {
     const color = getCategoryColor(m.category)
+    const locationLine = m.address ? `<br><small>${m.address}</small>` : ''
     return {
       lat: parseFloat(m.latitude),
       lng: parseFloat(m.longitude),
       name: m.description?.slice(0, 50) ?? m.category,
-      popup: `<strong>${m.category}</strong><br>${m.description ?? ''}`,
+      popup: `<strong>${m.category}</strong><br>${m.description ?? ''}${locationLine}`,
       options: {
         icon: L.divIcon({
           className: 'category-marker',
@@ -175,7 +176,8 @@ function focusOnMarker(marker: Marker) {
 
   const lat = parseFloat(marker.latitude)
   const lng = parseFloat(marker.longitude)
-  const popupContent = `<strong>${marker.category}</strong><br>${marker.description ?? ''}`
+  const locationLine = marker.address ? `<br><small>${marker.address}</small>` : ''
+  const popupContent = `<strong>${marker.category}</strong><br>${marker.description ?? ''}${locationLine}`
 
   const idx = props.markers.findIndex((m) => m.id === marker.id)
   const leafletMarker = idx >= 0 && leafletMarkers[idx] ? leafletMarkers[idx] : null

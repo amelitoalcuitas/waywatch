@@ -2,6 +2,7 @@ export interface Marker {
   id: number
   latitude: string
   longitude: string
+  address?: string | null
   category: string
   description: string
   likes: number

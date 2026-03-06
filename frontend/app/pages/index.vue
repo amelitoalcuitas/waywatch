@@ -44,9 +44,9 @@
             class="cursor-pointer bg-white px-4 py-3 hover:bg-gray-50"
             @click="focusOnMarker(marker)"
           >
-            <div class="flex items-start gap-3">
+            <div class="flex items-center gap-3">
               <span
-                class="inline-flex shrink-0 rounded px-2 py-0.5 text-xs font-medium text-white"
+                class="inline-flex w-24 shrink-0 items-center justify-center rounded px-2 py-0.5 text-xs font-medium text-white"
                 :style="{ backgroundColor: getCategoryColor(marker.category) }"
               >
                 {{ formatCategory(marker.category) }}
@@ -57,7 +57,7 @@
                 </p>
                 <p class="mt-1 text-xs text-gray-500">
                   {{ marker.user?.name }} ·
-                  {{ formatCoords(marker.latitude, marker.longitude) }}
+                  {{ marker.address || formatCoords(marker.latitude, marker.longitude) }}
                 </p>
               </div>
             </div>

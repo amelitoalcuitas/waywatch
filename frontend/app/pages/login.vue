@@ -66,7 +66,7 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: false })
+definePageMeta({ layout: false, middleware: 'guest' })
 
 const authStore = useAuthStore()
 const { pending } = storeToRefs(authStore)
