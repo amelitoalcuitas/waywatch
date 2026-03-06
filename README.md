@@ -701,6 +701,16 @@ AWS_BUCKET=waywatch-images
 
 ---
 
+## Phase 1 Quick Start
+
+1. Copy `.env.example` to `.env` and set `APP_KEY` (run `cd backend && php artisan key:generate --show` to generate).
+2. Start services: `docker compose up -d`
+3. Run migrations: `docker compose exec backend php artisan migrate`
+4. (Optional) Seed: `docker compose exec backend php artisan db:seed`
+5. API base: `http://localhost/api` (e.g. `GET /api/markers?latitude=14.6&longitude=121&radius=50`)
+
+---
+
 ## Useful Docker Commands
 
 ```bash

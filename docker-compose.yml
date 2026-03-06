@@ -1,0 +1,120 @@
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - ./backend:/var/www/backend
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - waywatch
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/php/Dockerfile
+    volumes:
+      - ./backend:/var/www/backend
+    environment:
+      APP_ENV: local
+      APP_KEY: ${APP_KEY}
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_CLIENT: predis
+      REDIS_HOST: redis
+      AWS_ENDPOINT: ${AWS_ENDPOINT:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_BUCKET: ${AWS_BUCKET:-}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+    depends_on:
+      - db
+      - redis
+    networks:
+      - waywatch
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/node/Dockerfile
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - waywatch
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - waywatch
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - waywatch
+
+  queue:
+    build:
+      context: ./backend
+      dockerfile: ../docker/php/Dockerfile
+    command: php artisan queue:work --sleep=3 --tries=3
+    volumes:
+      - ./backend:/var/www/backend
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_CLIENT: predis
+      REDIS_HOST: redis
+    depends_on:
+      - db
+      - redis
+    networks:
+      - waywatch
+
+  scheduler:
+    build:
+      context: ./backend
+      dockerfile: ../docker/php/Dockerfile
+    command: sh -c "while true; do php artisan schedule:run; sleep 60; done"
+    volumes:
+      - ./backend:/var/www/backend
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_CLIENT: predis
+      REDIS_HOST: redis
+    depends_on:
+      - db
+    networks:
+      - waywatch
+
+volumes:
+  db_data:
+  redis_data:
+
+networks:
+  waywatch:
+    driver: bridge
