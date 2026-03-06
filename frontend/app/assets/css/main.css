@@ -1,0 +1,18 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+@theme {
+  /* WayWatch primary green (#059212) */
+  --color-primary: #059212;
+  --color-primary-50: #ecfdf5;
+  --color-primary-100: #d1fae5;
+  --color-primary-200: #a7f3d0;
+  --color-primary-300: #6ee7b7;
+  --color-primary-400: #34d399;
+  --color-primary-500: #059212;
+  --color-primary-600: #047a0f;
+  --color-primary-700: #03620c;
+  --color-primary-800: #024a09;
+  --color-primary-900: #013206;
+  --color-primary-950: #011903;
+}

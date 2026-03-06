@@ -6,9 +6,10 @@ services:
     volumes:
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
       - ./backend:/var/www/backend
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - backend
-      - frontend
     networks:
       - waywatch
 
@@ -37,23 +38,6 @@ services:
     depends_on:
       - db
       - redis
-    networks:
-      - waywatch
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: ../docker/node/Dockerfile
-    ports:
-      - "3000:3000"
-      - "24678:24678"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    environment:
-      NUXT_PUBLIC_API_BASE: http://localhost/api
-      NUXT_HOST: 0.0.0.0
-      CHOKIDAR_USEPOLLING: "true"
     networks:
       - waywatch
 

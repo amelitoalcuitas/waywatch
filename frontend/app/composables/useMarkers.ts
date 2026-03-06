@@ -51,7 +51,7 @@ export async function fetchMarkers(
     query.start_date = selectedDate
     query.end_date = selectedDate
   }
-  if (selectedCategory) {
+  if (selectedCategory && selectedCategory !== 'all') {
     query.category = selectedCategory
   }
 
@@ -66,11 +66,32 @@ export function formatDateForInput(d: Date): string {
 }
 
 export const CATEGORY_OPTIONS = [
-  { value: '', label: 'All' },
+  { value: 'all', label: 'All' },
+  { value: 'checkpoint', label: 'Checkpoint' },
   { value: 'road_repair', label: 'Road Repair' },
   { value: 'accident', label: 'Accident' },
   { value: 'traffic', label: 'Traffic' },
   { value: 'flood', label: 'Flood' },
   { value: 'hazard', label: 'Hazard' },
-  { value: 'checkpoint', label: 'Checkpoint' },
 ]
+
+export const CATEGORY_COLORS: Record<string, string> = {
+  accident: '#DC2626',
+  hazard: '#F97316',
+  road_repair: '#F59E0B',
+  traffic: '#EAB308',
+  flood: '#0EA5E9',
+  checkpoint: '#059212',
+}
+
+export function getCategoryColor(category: string): string {
+  return CATEGORY_COLORS[category] ?? '#059212'
+}
+
+export function formatCategory(cat: string): string {
+  return CATEGORY_OPTIONS.find((o) => o.value === cat)?.label ?? cat
+}
+
+export function formatCoords(lat: string, lng: string): string {
+  return `${parseFloat(lat).toFixed(4)}, ${parseFloat(lng).toFixed(4)}`
+}

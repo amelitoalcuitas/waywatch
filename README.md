@@ -1,5 +1,7 @@
 # WayWatch – Crowdsourced Road Report Map
 
+> **For AI agents:** See [PROJECT_STRUCTURE.md](./PROJECT_STRUCTURE.md) for project folder structure, page/component organization conventions, and routing patterns. Use it when adding new pages, components, or features.
+
 WayWatch is a **mobile-first crowdsourced map reporting web application** where users can place temporary markers to report road conditions, hazards, and other real-world situations.
 
 The platform allows the community to share **real-time local information** such as road repairs, accidents, floods, and checkpoints so other users can avoid affected areas.
@@ -141,6 +143,7 @@ To prevent abuse:
 
 - Nuxt 3
 - Vue 3
+- Nuxt UI (always use Nuxt UI components for UI elements)
 - TailwindCSS
 - Leaflet
 - Pinia
@@ -237,6 +240,28 @@ Main components:
 - User location
 - Marker rendering
 - Filter markers by category and date
+
+---
+
+### MapFilterBar
+
+- Filter bar with category selector (USelect) and date picker
+- Composes the main map page filter controls
+
+---
+
+### MapSection
+
+- Wrapper around MapView
+- Forwards bounds-change and map-click events (add marker via map click)
+
+---
+
+### MarkerList
+
+- Scrollable list of markers with loading and empty states
+- Category-colored badges
+- Click marker to focus on map
 
 ---
 
@@ -489,21 +514,21 @@ waywatch/
 ## docker-compose.yml (Development)
 
 ```yaml
-version: "3.9"
+version: '3.9'
 
 services:
-
   # ─── Nginx Reverse Proxy ───────────────────────────────
   nginx:
     image: nginx:alpine
     ports:
-      - "80:80"
+      - '80:80'
     volumes:
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
       - ./backend:/var/www/backend
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     depends_on:
       - backend
-      - frontend
     networks:
       - waywatch
 
@@ -523,28 +548,13 @@ services:
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_HOST: redis
-      AWS_ENDPOINT: ${AWS_ENDPOINT}         # S3-compatible object storage
+      AWS_ENDPOINT: ${AWS_ENDPOINT} # S3-compatible object storage
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       AWS_BUCKET: ${AWS_BUCKET}
     depends_on:
       - db
       - redis
-    networks:
-      - waywatch
-
-  # ─── Nuxt 3 Frontend ───────────────────────────────────
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: ../docker/node/Dockerfile
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    environment:
-      NUXT_PUBLIC_API_BASE: http://nginx/api
-    depends_on:
-      - backend
     networks:
       - waywatch
 
@@ -616,15 +626,14 @@ networks:
 
 ## Service Summary
 
-| Service     | Image / Build         | Purpose                                      |
-|-------------|-----------------------|----------------------------------------------|
-| `nginx`     | `nginx:alpine`        | Reverse proxy, routes `/api` to backend, `/` to frontend |
-| `backend`   | Custom PHP-FPM        | Laravel REST API, authentication, marker logic |
-| `frontend`  | Custom Node           | Nuxt 3 SSR app serving the Vue + Leaflet map |
-| `db`        | `postgres:16-alpine`  | Primary data store (markers, users, votes)   |
-| `redis`     | `redis:7-alpine`      | Queue driver and optional response caching   |
-| `queue`     | Same as backend       | Processes background jobs (e.g., image cleanup) |
-| `scheduler` | Same as backend       | Runs Laravel Scheduler every 60s for weekly cleanup |
+| Service     | Image / Build        | Purpose                                                                    |
+| ----------- | -------------------- | -------------------------------------------------------------------------- |
+| `nginx`     | `nginx:alpine`       | Reverse proxy, routes `/api` to backend, `/` to local frontend (port 3000) |
+| `backend`   | Custom PHP-FPM       | Laravel REST API, authentication, marker logic                             |
+| `db`        | `postgres:16-alpine` | Primary data store (markers, users, votes)                                 |
+| `redis`     | `redis:7-alpine`     | Queue driver and optional response caching                                 |
+| `queue`     | Same as backend      | Processes background jobs (e.g., image cleanup)                            |
+| `scheduler` | Same as backend      | Runs Laravel Scheduler every 60s for weekly cleanup                        |
 
 ---
 
@@ -641,9 +650,9 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
     }
 
-    # Forward everything else to Nuxt
+    # Forward everything else to Nuxt (running locally on host)
     location / {
-        proxy_pass http://frontend:3000;
+        proxy_pass http://host.docker.internal:3000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }
@@ -679,24 +688,6 @@ CMD ["php-fpm"]
 
 ---
 
-## Node Dockerfile (docker/node/Dockerfile)
-
-```dockerfile
-FROM node:20-alpine
-
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-
-COPY . .
-RUN npm run build
-
-EXPOSE 3000
-CMD ["node", ".output/server/index.mjs"]
-```
-
----
-
 ## Environment Variables (.env)
 
 ```env
@@ -718,15 +709,16 @@ AWS_BUCKET=waywatch-images
 ## Phase 1 Quick Start
 
 1. Copy `.env.example` to `.env` and set `APP_KEY` (run `cd backend && php artisan key:generate --show` to generate).
-2. Install dependencies locally (vendor and node_modules stay on host, mounted into containers):
+2. Install dependencies locally:
    ```bash
    cd backend && composer install && cd ..
    cd frontend && npm install && cd ..
    ```
-3. Start services: `docker compose up -d`
+3. Start Docker services (backend, nginx, db, redis): `docker compose up -d`
 4. Run migrations: `docker compose exec backend php artisan migrate`
 5. (Optional) Seed: `docker compose exec backend php artisan db:seed`
-6. API base: `http://localhost/api` (e.g. `GET /api/markers?latitude=14.6&longitude=121&radius=50`)
+6. Run the frontend locally: `cd frontend && npm run dev`
+7. API: `http://localhost/api` · Frontend: `http://localhost:3000` or `http://localhost` (via nginx proxy)
 
 ---
 
@@ -782,6 +774,45 @@ Future features like **route planning and directions** will build upon the exist
 
 ---
 
+## Component Guidelines
+
+**Always use Nuxt UI components** for buttons, inputs, modals, cards, and other UI elements. Prefer Nuxt UI primitives over custom HTML or other component libraries.
+
+Every new UI element that can be reused should be extracted into its own component. Place reusable components in `frontend/app/components/` so they can be shared across pages and composed into larger views.
+
+The main map page (`pages/index.vue`) is composed of `MapFilterBar`, `MapSection`, `MarkerList`, and `AddMarkerModal`.
+
+---
+
+## Page and Component Organization
+
+When adding new pages (e.g. Customer, Profile, Settings):
+
+1. **New pages convention:** Create a folder named after the feature with `index.vue` inside:
+   - Example: `pages/customer/index.vue` for the Customer page
+   - This keeps routes organized and allows nested routes later (e.g. `pages/customer/[id].vue`)
+
+2. **Feature-specific components:** For each feature page, create a matching components folder in `components/`:
+   - Example: `components/customer/` for Customer-related components
+   - Dissect the page into smaller components and place them in this folder
+   - Keeps page-specific components colocated with the feature; shared components stay in `components/` root
+
+3. **Example structure:**
+
+```
+pages/
+  customer/
+    index.vue
+    [id].vue
+components/
+  customer/
+    CustomerList.vue
+    CustomerForm.vue
+    CustomerCard.vue
+```
+
+---
+
 # Project Folder Structure & Step-by-Step Build Plan
 
 ## Recommended Folder Structure
@@ -801,8 +832,13 @@ waywatch/
 │       └── api.php
 ├── frontend/                 # Nuxt 3 + Vue 3
 │   ├── components/
+│   │   ├── MapFilterBar.vue
+│   │   ├── MapSection.vue
 │   │   ├── MapView.vue
+│   │   ├── MarkerList.vue
 │   │   ├── AddMarkerModal.vue
+│   │   ├── DatePicker.vue
+│   │   ├── AppHeader.vue
 │   │   ├── MarkerDetails.vue
 │   │   └── Navigation.vue
 │   ├── pages/

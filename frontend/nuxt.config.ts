@@ -3,7 +3,13 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
   ssr: false,
-  modules: ['@pinia/nuxt', '@nuxtjs/tailwindcss', '@nuxtjs/leaflet'],
+  modules: [
+    '@pinia/nuxt',
+    '@nuxt/ui',
+    '@nuxtjs/leaflet',
+    '@tailwindcss/postcss'
+  ],
+  css: ['~/assets/css/main.css'],
   leaflet: {
     markerCluster: true
   },
