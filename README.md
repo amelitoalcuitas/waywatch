@@ -4,7 +4,7 @@ WayWatch is a **mobile-first crowdsourced map reporting web application** where 
 
 The platform allows the community to share **real-time local information** such as road repairs, accidents, floods, and checkpoints so other users can avoid affected areas.
 
-Markers are **temporary and automatically expire after 24 hours**, ensuring the map stays fresh and relevant.
+Markers are **temporary and automatically expire** with a scheduled cleanup weekly, ensuring the map stays relevant while also allowing historical analysis.
 
 ---
 
@@ -15,6 +15,7 @@ Markers are **temporary and automatically expire after 24 hours**, ensuring the 
 - Prioritize **mobile usability**
 - Use **open and cost-efficient infrastructure**
 - Build an **MVP that can run on a single VPS**
+- Prepare for **future directions/route features**
 
 ---
 
@@ -28,6 +29,7 @@ Markers are **temporary and automatically expire after 24 hours**, ensuring the 
 - Marker clustering when zoomed out
 - Tap marker to view details
 - Filter markers by category
+- Filter markers by **date range** (new feature)
 
 ---
 
@@ -58,9 +60,14 @@ Each marker includes:
 - Likes
 - Dislikes
 
-Markers automatically **expire after 24 hours**.
+Markers will **remain visible until cleaned up weekly**. Users can filter markers by date to analyze historical data.
 
-Expired markers should not appear on the map.
+---
+
+## Planned Features
+
+- **Route/Directions**: The app will suggest a route and list markers along the route.
+- Historical marker analysis via date filters.
 
 ---
 
@@ -90,6 +97,7 @@ Rules:
 
 - One vote per user per marker
 - Votes help determine marker credibility
+- Only **registered users** can vote
 
 ---
 
@@ -109,12 +117,20 @@ Backend must validate the distance before accepting the marker.
 
 ---
 
+## User System
+
+- **Registration and login required** for adding markers, voting, or other interactions
+- Guests can view the map and markers freely
+- Main page is the **map view**
+- User database prepared for future features
+
+---
+
 ## Anti-Spam Protection
 
 To prevent abuse:
 
 - Maximum **5 markers per user per day**
-- Require user authentication
 - API rate limiting
 
 ---
@@ -137,7 +153,8 @@ To prevent abuse:
 - REST API
 - MySQL or PostgreSQL
 - Laravel Queues
-- Laravel Scheduler
+- Laravel Scheduler (weekly cleanup)
+- Authentication and registration system
 
 ---
 
@@ -205,6 +222,7 @@ Main components:
 - Marker clustering
 - User location
 - Marker rendering
+- Filter markers by category and date
 
 ---
 
@@ -218,6 +236,7 @@ Fields:
 - Description input
 - Image upload (max 6)
 - Submit button
+- Only **registered users** can submit
 
 ---
 
@@ -230,7 +249,15 @@ Includes:
 - Images
 - Description
 - Category
-- Like / Dislike buttons
+- Like / Dislike buttons (restricted to logged-in users)
+
+---
+
+### Authentication Pages
+
+- User registration
+- User login
+- Password reset
 
 ---
 
@@ -238,13 +265,26 @@ Includes:
 
 Mobile layout includes:
 
-- Map view
+- Map view (main page)
 - Profile page
 - Reports history
 
 ---
 
 # Database Schema
+
+## users
+
+```
+id
+name
+email
+password
+created_at
+updated_at
+```
+
+---
 
 ## markers
 
@@ -259,6 +299,7 @@ likes
 dislikes
 expires_at
 created_at
+updated_at
 ```
 
 ---
@@ -270,6 +311,7 @@ id
 marker_id
 image_url
 created_at
+updated_at
 ```
 
 ---
@@ -282,17 +324,7 @@ marker_id
 user_id
 vote_type
 created_at
-```
-
----
-
-## users
-
-```
-id
-name
-email
-created_at
+updated_at
 ```
 
 ---
@@ -311,9 +343,11 @@ Query parameters:
 latitude
 longitude
 radius
+start_date (optional)
+end_date (optional)
 ```
 
-Returns markers within the specified radius.
+Returns markers within the radius and optional date range.
 
 ---
 
@@ -333,6 +367,8 @@ description
 images[]
 ```
 
+Requires authentication.
+
 ---
 
 ## Vote Marker
@@ -347,23 +383,13 @@ Payload:
 vote_type (like | dislike)
 ```
 
----
-
-# Marker Expiration
-
-Markers expire **24 hours after creation**.
-
-Implementation:
-
-- `expires_at` column in markers table
-- Expired markers excluded from queries
-- Scheduled cleanup job deletes expired markers
+Requires authentication.
 
 ---
 
-# Background Jobs
+# Marker Cleanup
 
-Laravel Scheduler runs periodic jobs.
+Markers are cleaned **weekly** via Laravel Scheduler.
 
 Tasks:
 
@@ -374,7 +400,7 @@ Tasks:
 Example cron job:
 
 ```
-* * * * * php artisan schedule:run
+* * * * 0 php artisan schedule:run   # Runs weekly
 ```
 
 ---
@@ -399,18 +425,7 @@ Required protections:
 - Validate image uploads
 - Restrict file size and formats
 - Enforce location radius rules
-
----
-
-# Future Features (Optional)
-
-Possible improvements after MVP:
-
-- Push notifications for nearby reports
-- Heatmap visualization
-- Marker credibility score
-- "Confirm marker still exists" voting
-- Admin moderation tools
+- Authentication required for interactive actions
 
 ---
 
@@ -442,6 +457,90 @@ This project prioritizes:
 - Cost efficiency
 - Scalability
 
-Avoid unnecessary complexity.
+Focus on delivering a **working MVP first**, with **weekly marker cleanup** and **date filters** for analysis.  
+Future features like **route planning and directions** will build upon the existing database and map framework.
 
-Focus on delivering a **working MVP first**.
+---
+
+# Project Folder Structure & Step-by-Step Build Plan
+
+This section is designed for coding agents to **implement the project in order**.
+
+## Recommended Folder Structure
+
+```
+waywatch/
+├── backend/                  # Laravel API
+│   ├── app/
+│   │   ├── Models/
+│   │   ├── Http/
+│   │   │   └── Controllers/
+│   │   └── Console/Jobs/    # Scheduled cleanup jobs
+│   ├── database/
+│   │   ├── migrations/
+│   │   └── seeders/
+│   └── routes/
+│       └── api.php
+├── frontend/                 # Nuxt 3 + Vue 3
+│   ├── components/
+│   │   ├── MapView.vue
+│   │   ├── AddMarkerModal.vue
+│   │   ├── MarkerDetails.vue
+│   │   └── Navigation.vue
+│   ├── pages/
+│   │   ├── index.vue         # Main map page
+│   │   ├── login.vue
+│   │   └── register.vue
+│   └── plugins/
+│       └── leaflet.js
+├── storage/                  # Images (local fallback or staging)
+├── README.md
+└── package.json / composer.json
+```
+
+---
+
+## Step-by-Step Build Plan
+
+**Phase 1: Setup Backend & Auth**
+
+1. Initialize Laravel project
+2. Setup `users` table and authentication (register, login)
+3. Setup marker-related tables (`markers`, `marker_images`, `marker_votes`)
+4. Implement API endpoints for markers and votes
+5. Implement weekly cleanup job
+
+**Phase 2: Setup Frontend & Map**
+
+1. Initialize Nuxt 3 project
+2. Configure Leaflet with OpenStreetMap tiles
+3. Create main map page (`index.vue`)
+4. Fetch and display markers from API
+5. Add marker clustering
+
+**Phase 3: Marker Actions**
+
+1. Implement AddMarkerModal
+2. Restrict marker creation to registered users
+3. Implement image upload (S3 or object storage)
+4. Add category selection and description
+5. Implement location radius check
+
+**Phase 4: Voting & Date Filters**
+
+1. Add voting buttons in MarkerDetails
+2. Restrict votes to authenticated users
+3. Add filter for date ranges on markers
+4. Test API for fetching filtered markers
+
+**Phase 5: UI Polish & Future Features Prep**
+
+1. Mobile-first styling with TailwindCSS
+2. Bottom navigation for mobile
+3. Prepare database and frontend hooks for future route/direction feature
+4. Test weekly cleanup and ensure historical markers can be analyzed via date filter
+5. Deploy backend and frontend to VPS with Nginx, configure Cloudflare CDN, and object storage
+
+---
+
+**End of README.md**
