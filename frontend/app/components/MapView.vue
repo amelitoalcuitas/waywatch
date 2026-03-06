@@ -14,18 +14,32 @@
         layer-type="base"
         name="OpenStreetMap"
       />
-      <LCircleMarker
-        v-if="userLocation"
+      <LMarker
+        v-if="userLocation && userLocationIcon"
         :lat-lng="userLocation"
-        :radius="8"
-        color="#2563eb"
-        fill-color="#3b82f6"
-        :fill-opacity="0.7"
-        :weight="2"
-      >
-        <LTooltip :options="{ permanent: true }">You are here</LTooltip>
-      </LCircleMarker>
+        :icon="userLocationIcon"
+      />
     </LMap>
+    <button
+      type="button"
+      class="absolute bottom-4 right-4 z-[1000] flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-lg ring-1 ring-gray-200 transition hover:bg-gray-50 active:scale-95 disabled:opacity-50"
+      :disabled="!userLocation"
+      :title="userLocation ? 'Center on my location' : 'Location unavailable'"
+      @click="centerOnUserLocation"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        class="h-5 w-5 text-blue-600"
+      >
+        <path
+          fill-rule="evenodd"
+          d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z"
+          clip-rule="evenodd"
+        />
+      </svg>
+    </button>
   </div>
 </template>
 
@@ -50,6 +64,18 @@ const center = ref<[number, number]>(DEFAULT_CENTER)
 const userLocation = ref<[number, number] | null>(null)
 const mapRef = ref<any>(null)
 
+const L = (globalThis as any).L
+const userLocationIcon = L?.divIcon({
+  className: 'user-location-marker',
+  html: `<div style="width:24px;height:24px;background:#2563eb;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.3);border:3px solid white">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" width="14" height="14">
+      <path fill-rule="evenodd" d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z" clip-rule="evenodd"/>
+    </svg>
+  </div>`,
+  iconSize: [24, 24],
+  iconAnchor: [12, 12],
+})
+
 onMounted(() => {
   if (!navigator.geolocation) return
   navigator.geolocation.getCurrentPosition(
@@ -63,6 +89,13 @@ onMounted(() => {
     }
   )
 })
+
+function centerOnUserLocation() {
+  if (!userLocation.value) return
+  const map = mapRef.value?.leafletObject
+  if (!map) return
+  map.flyTo(userLocation.value, 18, { duration: 0.4 })
+}
 let clusterRef: any = null
 let leafletMarkers: any[] = []
 let skipNextBoundsEmit = false
@@ -183,3 +216,10 @@ watch(
   }
 )
 </script>
+
+<style>
+.user-location-marker {
+  background: none !important;
+  border: none !important;
+}
+</style>

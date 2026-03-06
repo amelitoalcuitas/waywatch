@@ -9,90 +9,74 @@
         class="space-y-4"
         @submit.prevent="onSubmit"
       >
-        <div>
-          <label
-            for="name"
-            class="mb-1 block text-sm font-medium text-gray-700"
-          >
-            Name
-          </label>
-          <input
-            id="name"
+        <UFormField
+          label="Name"
+          required
+        >
+          <UInput
             v-model="name"
             type="text"
             required
             autocomplete="name"
-            class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             placeholder="Your name"
-          >
-        </div>
+            class="w-full"
+          />
+        </UFormField>
 
-        <div>
-          <label
-            for="email"
-            class="mb-1 block text-sm font-medium text-gray-700"
-          >
-            Email
-          </label>
-          <input
-            id="email"
+        <UFormField
+          label="Email"
+          required
+        >
+          <UInput
             v-model="email"
             type="email"
             required
             autocomplete="email"
-            class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             placeholder="you@example.com"
-          >
-        </div>
+            class="w-full"
+          />
+        </UFormField>
 
-        <div>
-          <label
-            for="password"
-            class="mb-1 block text-sm font-medium text-gray-700"
-          >
-            Password
-          </label>
-          <input
-            id="password"
+        <UFormField
+          label="Password"
+          required
+        >
+          <UInput
             v-model="password"
             type="password"
             required
             autocomplete="new-password"
-            class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          >
-        </div>
+            class="w-full"
+          />
+        </UFormField>
 
-        <div>
-          <label
-            for="password_confirmation"
-            class="mb-1 block text-sm font-medium text-gray-700"
-          >
-            Confirm password
-          </label>
-          <input
-            id="password_confirmation"
+        <UFormField
+          label="Confirm password"
+          required
+        >
+          <UInput
             v-model="passwordConfirmation"
             type="password"
             required
             autocomplete="new-password"
-            class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          >
-        </div>
+            class="w-full"
+          />
+        </UFormField>
 
-        <p
+        <UAlert
           v-if="error"
-          class="text-sm text-red-600"
-        >
-          {{ error }}
-        </p>
+          color="error"
+          variant="soft"
+          :description="error"
+        />
 
-        <button
+        <UButton
           type="submit"
-          :disabled="pending"
-          class="w-full rounded bg-primary px-4 py-2 font-medium text-white hover:bg-primary/90 disabled:opacity-50"
+          block
+          :loading="pending"
         >
           {{ pending ? 'Creating account...' : 'Register' }}
-        </button>
+        </UButton>
       </form>
 
       <p class="mt-4 text-center text-sm text-gray-600">

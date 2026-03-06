@@ -87,11 +87,3 @@ export const CATEGORY_COLORS: Record<string, string> = {
 export function getCategoryColor(category: string): string {
   return CATEGORY_COLORS[category] ?? '#059212'
 }
-
-export function formatCategory(cat: string): string {
-  return CATEGORY_OPTIONS.find((o) => o.value === cat)?.label ?? cat
-}
-
-export function formatCoords(lat: string, lng: string): string {
-  return `${parseFloat(lat).toFixed(4)}, ${parseFloat(lng).toFixed(4)}`
-}
