@@ -21,6 +21,7 @@ class MarkerController extends Controller
             'radius' => ['required', 'numeric', 'min:0.1', 'max:1000'],
             'start_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            'category' => ['nullable', 'string', Rule::in(Marker::CATEGORIES)],
         ]);
 
         $query = Marker::query()
@@ -38,6 +39,10 @@ class MarkerController extends Controller
         }
         if (! empty($validated['end_date'])) {
             $query->whereDate('created_at', '<=', $validated['end_date']);
+        }
+
+        if (! empty($validated['category'])) {
+            $query->where('category', $validated['category']);
         }
 
         $markers = $query->get();

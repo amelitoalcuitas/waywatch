@@ -143,7 +143,21 @@ To prevent abuse:
 - Vue 3
 - TailwindCSS
 - Leaflet
+- Pinia
 - OpenStreetMap
+
+---
+
+## State Management
+
+The frontend uses **Pinia** for global state. The `markers` store holds:
+
+- Filter state (category, date)
+- Map bounds parameters
+- Markers list and loading state
+- Debounced fetch logic for the markers API
+
+This setup prepares for future features such as auth state, user preferences, and route planning.
 
 ---
 
@@ -704,10 +718,15 @@ AWS_BUCKET=waywatch-images
 ## Phase 1 Quick Start
 
 1. Copy `.env.example` to `.env` and set `APP_KEY` (run `cd backend && php artisan key:generate --show` to generate).
-2. Start services: `docker compose up -d`
-3. Run migrations: `docker compose exec backend php artisan migrate`
-4. (Optional) Seed: `docker compose exec backend php artisan db:seed`
-5. API base: `http://localhost/api` (e.g. `GET /api/markers?latitude=14.6&longitude=121&radius=50`)
+2. Install dependencies locally (vendor and node_modules stay on host, mounted into containers):
+   ```bash
+   cd backend && composer install && cd ..
+   cd frontend && npm install && cd ..
+   ```
+3. Start services: `docker compose up -d`
+4. Run migrations: `docker compose exec backend php artisan migrate`
+5. (Optional) Seed: `docker compose exec backend php artisan db:seed`
+6. API base: `http://localhost/api` (e.g. `GET /api/markers?latitude=14.6&longitude=121&radius=50`)
 
 ---
 
