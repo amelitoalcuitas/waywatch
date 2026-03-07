@@ -3,7 +3,7 @@
     <div class="flex h-full w-full flex-col">
       <!-- Row 1: Filters -->
       <div
-        class="flex shrink-0 items-center justify-between gap-4 border-b border-gray-200 bg-white px-4 py-3"
+        class="flex shrink-0 items-center justify-between gap-4 px-4 py-3"
       >
         <USelect
           v-model="selectedCategory"
@@ -102,14 +102,83 @@ const store = useMarkersStore();
 const authStore = useAuthStore();
 const { markers, pending } = storeToRefs(store);
 
+const RADIUS_KM = 3;
+
 const showAddModal = ref(false);
 const addMarkerCoords = ref<{ lat: number; lng: number } | null>(null);
 const focusMarkerId = ref<number | null>(null);
 const showDetailsModal = ref(false);
 const selectedMarker = ref<Marker | null>(null);
+const toast = useToast();
 
-function onMapClick(coords: { lat: number; lng: number }) {
+function haversineDistanceKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+async function getLocation(): Promise<{ lat: number; lng: number } | null> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve(null);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      },
+      () => {
+        resolve(null);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  });
+}
+
+async function onMapClick(coords: { lat: number; lng: number }) {
   if (!authStore.isAuthenticated) return;
+
+  const userLoc = await getLocation();
+  if (!userLoc) {
+    toast.add({
+      title: 'Location required',
+      description:
+        'Location access is required to add a report. Please enable location in your browser.',
+      color: 'warning'
+    });
+    return;
+  }
+
+  const dist = haversineDistanceKm(
+    coords.lat,
+    coords.lng,
+    userLoc.lat,
+    userLoc.lng
+  );
+
+  if (dist > RADIUS_KM) {
+    toast.add({
+      title: 'Marker out of range',
+      description: `Marker must be within ${RADIUS_KM} km of your current location. (${dist.toFixed(
+        1
+      )} km away)`,
+      color: 'error'
+    });
+    return;
+  }
+
   addMarkerCoords.value = coords;
   showAddModal.value = true;
 }

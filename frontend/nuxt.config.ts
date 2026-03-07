@@ -25,5 +25,9 @@ export default defineNuxtConfig({
         usePolling: true
       }
     }
+  },
+
+  ui: {
+    colorMode: false
   }
 });

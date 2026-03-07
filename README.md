@@ -683,19 +683,57 @@ AWS_BUCKET=waywatch-images
 
 ---
 
-## Phase 1 Quick Start
+## Local Development Setup
 
-1. Copy `.env.example` to `.env` and set `APP_KEY` (run `cd backend && php artisan key:generate --show` to generate).
-2. Install dependencies locally:
+Follow these steps to run WayWatch locally using Docker and the Nuxt dev server:
+
+1. **Copy environment file and generate app key**
    ```bash
-   cd backend && composer install && cd ..
-   cd frontend && npm install && cd ..
+   cp backend/.env.example backend/.env
+   cd backend
+   php artisan key:generate
+   cd ..
    ```
-3. Start Docker services (backend, nginx, db, redis): `docker compose up -d`
-4. Run migrations: `docker compose exec backend php artisan migrate`
-5. (Optional) Seed: `docker compose exec backend php artisan db:seed`
-6. Run the frontend locally: `cd frontend && npm run dev`
-7. API: `http://localhost/api` · Frontend: `http://localhost:3000` or `http://localhost` (via nginx proxy)
+
+2. **Install dependencies**
+   ```bash
+   cd backend
+   composer install
+   cd ../frontend
+   npm install
+   cd ..
+   ```
+
+3. **Start Docker services (backend, database, Redis, nginx)**
+   ```bash
+   docker compose up -d
+   ```
+
+4. **Run database migrations**
+   ```bash
+   docker compose exec backend php artisan migrate
+   ```
+
+5. **Seed initial data (optional but recommended)**
+   ```bash
+   docker compose exec backend php artisan db:seed
+   ```
+
+6. **Create the storage symlink (required for image uploads)**
+   ```bash
+   docker compose exec backend php artisan storage:link
+   ```
+   This command fixes issues where marker image uploads fail with a 500 error by ensuring `public/storage` is correctly linked to `storage/app/public`.
+
+7. **Run the frontend dev server**
+   ```bash
+   cd frontend
+   npm run dev
+   ```
+
+8. **Access the app**
+   - **Frontend** (Nuxt dev server): `http://localhost:3000`
+   - **API (via nginx)**: `http://localhost/api`
 
 ---
 
