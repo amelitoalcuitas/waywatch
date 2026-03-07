@@ -29,5 +29,20 @@ export function useApi() {
     })
   }
 
-  return { apiBase, authHeaders, apiFetch }
+  async function apiFetchForm<T>(
+    path: string,
+    formData: FormData,
+    options: { method?: string } = {}
+  ): Promise<T> {
+    const { method = 'POST' } = options
+    const url = path.startsWith('http') ? path : `${apiBase}${path.startsWith('/') ? '' : '/'}${path}`
+    const headers = authHeaders()
+    return $fetch<T>(url, {
+      method,
+      body: formData,
+      headers,
+    })
+  }
+
+  return { apiBase, authHeaders, apiFetch, apiFetchForm }
 }

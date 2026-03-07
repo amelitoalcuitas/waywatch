@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Marker;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Storage;
 
 class CleanupExpiredMarkers extends Command
 {
@@ -16,7 +17,16 @@ class CleanupExpiredMarkers extends Command
         $expired = Marker::where('expires_at', '<', now())->get();
         $count = $expired->count();
 
+        $disk = config('filesystems.default');
+        $storageDisk = ($disk === 's3') ? 's3' : 'public';
+
         foreach ($expired as $marker) {
+            foreach ($marker->images as $image) {
+                $path = $image->getStoragePath();
+                if (str_starts_with($path, 'markers/')) {
+                    Storage::disk($storageDisk)->delete($path);
+                }
+            }
             $marker->images()->delete();
             $marker->votes()->delete();
             $marker->delete();

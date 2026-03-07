@@ -55,12 +55,26 @@ class MarkerController extends Controller
         $validated = $request->validate([
             'latitude' => ['required', 'numeric', 'between:-90,90'],
             'longitude' => ['required', 'numeric', 'between:-180,180'],
+            'user_latitude' => ['required', 'numeric', 'between:-90,90'],
+            'user_longitude' => ['required', 'numeric', 'between:-180,180'],
             'address' => ['nullable', 'string', 'max:500'],
             'category' => ['required', 'string', Rule::in(Marker::CATEGORIES)],
             'description' => ['required', 'string', 'max:2000'],
             'images' => ['nullable', 'array', 'max:6'],
-            'images.*' => ['string', 'url'],
+            'images.*' => ['string', 'regex:/^markers\/[a-zA-Z0-9\-_.]+\.(jpe?g|png|webp)$/'],
         ]);
+
+        $markerLat = (float) $validated['latitude'];
+        $markerLon = (float) $validated['longitude'];
+        $userLat = (float) $validated['user_latitude'];
+        $userLon = (float) $validated['user_longitude'];
+
+        $distanceKm = $this->haversineDistanceKm($markerLat, $markerLon, $userLat, $userLon);
+        if ($distanceKm > 3) {
+            return response()->json([
+                'message' => 'Marker must be within 3 km of your current location.',
+            ], 422);
+        }
 
         $user = $request->user();
 
@@ -155,5 +169,20 @@ class MarkerController extends Controller
                 sin( radians( markers.latitude ) )
             ) ) <= {$radiusKm}
         ";
+    }
+
+    private function haversineDistanceKm(float $lat1, float $lon1, float $lat2, float $lon2): float
+    {
+        $earthRadius = 6371;
+        $lat1Rad = deg2rad($lat1);
+        $lat2Rad = deg2rad($lat2);
+        $deltaLat = deg2rad($lat2 - $lat1);
+        $deltaLon = deg2rad($lon2 - $lon1);
+
+        $a = sin($deltaLat / 2) ** 2
+            + cos($lat1Rad) * cos($lat2Rad) * sin($deltaLon / 2) ** 2;
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+        return $earthRadius * $c;
     }
 }

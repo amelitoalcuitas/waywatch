@@ -55,6 +55,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   boundsChange: [bounds: { getCenter: () => { lat: number; lng: number }; getNorthEast: () => { lat: number; lng: number } }]
   mapClick: [coords: { lat: number; lng: number }]
+  markerClick: [marker: Marker]
 }>()
 
 const DEFAULT_CENTER: [number, number] = [14.5995, 120.9842]
@@ -142,6 +143,13 @@ async function updateCluster() {
   })
   clusterRef = markerCluster
   leafletMarkers = markers
+
+  markers.forEach((m, i) => {
+    m.on('click', () => {
+      const marker = props.markers[i]
+      if (marker) emit('markerClick', marker)
+    })
+  })
 }
 
 function onMapReady() {
@@ -176,34 +184,22 @@ function focusOnMarker(marker: Marker) {
 
   const lat = parseFloat(marker.latitude)
   const lng = parseFloat(marker.longitude)
-  const locationLine = marker.address ? `<br><small>${marker.address}</small>` : ''
-  const popupContent = `<strong>${marker.category}</strong><br>${marker.description ?? ''}${locationLine}`
 
   const idx = props.markers.findIndex((m) => m.id === marker.id)
   const leafletMarker = idx >= 0 && leafletMarkers[idx] ? leafletMarkers[idx] : null
 
   skipNextBoundsEmit = true
 
-  const showPopup = () => {
+  const zoomAndEmit = () => {
     map.flyTo([lat, lng], 16, { duration: 0.4 })
-    if (clusterRef && leafletMarker) {
-      leafletMarker.bindPopup(popupContent).openPopup()
-    } else {
-      const L = (globalThis as any).L
-      if (L) {
-        L.popup()
-          .setLatLng([lat, lng])
-          .setContent(popupContent)
-          .openOn(map)
-      }
-    }
+    emit('markerClick', marker)
     setTimeout(() => { skipNextBoundsEmit = false }, 2000)
   }
 
   if (clusterRef && leafletMarker) {
-    clusterRef.zoomToShowLayer(leafletMarker, showPopup)
+    clusterRef.zoomToShowLayer(leafletMarker, zoomAndEmit)
   } else {
-    showPopup()
+    zoomAndEmit()
   }
 }
 

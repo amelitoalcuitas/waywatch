@@ -21,6 +21,7 @@
           :focus-marker-id="focusMarkerId"
           @bounds-change="onBoundsChange"
           @map-click="onMapClick"
+          @marker-click="onMarkerClick"
         />
       </div>
 
@@ -76,6 +77,12 @@
         "
         @created="onMarkerCreated"
       />
+
+      <MarkerDetailsModal
+        :model-value="showDetailsModal"
+        :marker="selectedMarker"
+        @update:model-value="showDetailsModal = false"
+      />
     </div>
     <template #fallback>
       <div class="flex h-screen w-screen items-center justify-center">
@@ -89,6 +96,7 @@
 import { storeToRefs } from 'pinia';
 import { useMarkersStore } from '~/stores/markers';
 import { CATEGORY_OPTIONS, getCategoryColor } from '~/composables/useMarkers';
+import type { Marker } from '~/composables/useMarkers';
 
 const store = useMarkersStore();
 const authStore = useAuthStore();
@@ -97,6 +105,8 @@ const { markers, pending } = storeToRefs(store);
 const showAddModal = ref(false);
 const addMarkerCoords = ref<{ lat: number; lng: number } | null>(null);
 const focusMarkerId = ref<number | null>(null);
+const showDetailsModal = ref(false);
+const selectedMarker = ref<Marker | null>(null);
 
 function onMapClick(coords: { lat: number; lng: number }) {
   if (!authStore.isAuthenticated) return;
@@ -133,10 +143,15 @@ function formatCoords(lat: string, lng: string): string {
   return `${parseFloat(lat).toFixed(4)}, ${parseFloat(lng).toFixed(4)}`;
 }
 
-function focusOnMarker(marker: { id: number }) {
+function focusOnMarker(marker: Marker) {
   focusMarkerId.value = null;
   nextTick(() => {
     focusMarkerId.value = marker.id;
   });
+}
+
+function onMarkerClick(marker: Marker) {
+  selectedMarker.value = marker;
+  showDetailsModal.value = true;
 }
 </script>
