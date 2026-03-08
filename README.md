@@ -4,7 +4,7 @@ WayWatch is a **mobile-first crowdsourced map reporting web application** where 
 
 The platform allows the community to share **real-time local information** such as road repairs, accidents, floods, and checkpoints so other users can avoid affected areas.
 
-Markers are **temporary and automatically expire** with a scheduled cleanup weekly, ensuring the map stays relevant while also allowing historical analysis.
+Markers are **temporary and automatically expire** with a dynamic lifetime policy and scheduled cleanup, ensuring the map stays relevant while also allowing historical analysis.
 
 ---
 
@@ -60,7 +60,7 @@ Each marker includes:
 - Still there votes
 - Not there votes
 
-Markers will **remain visible until cleaned up weekly**. Users can filter markers by date to analyze historical data.
+Markers remain visible while active and are hidden once expired (`expires_at`). Cleanup runs regularly to remove expired rows and related data.
 
 ---
 
@@ -96,7 +96,7 @@ Vote types:
 Rules:
 
 - One vote per user per marker
-- Votes help determine whether a report remains active
+- Votes help determine whether a report remains active and can influence marker lifetime
 - Only **registered users** can vote
 
 ---
@@ -208,7 +208,7 @@ This setup prepares for future features such as auth state, user preferences, an
 - REST API
 - MySQL or PostgreSQL
 - Laravel Queues
-- Laravel Scheduler (weekly cleanup)
+- Laravel Scheduler (hourly cleanup)
 - Authentication and registration system
 
 ---
@@ -930,7 +930,17 @@ waywatch/
 3. Keep and polish single-date filtering on markers
 4. Test API for fetching filtered markers
 
-**Phase 5: UI Polish & Future Features Prep**
+**Phase 5: Admin Panel & Authorization**
+
+1. Implement overall authentication/session hardening (validate auth state on page refresh, handle expired auth, and enforce one active session per account)
+2. Build admin panel authentication/authorization access flow
+3. Implement proper authorization logic for admin actions and role-based permissions
+4. Implement user management (list users, update roles/status as needed)
+5. Add reported markers list view for admins
+6. Add delete action for reported markers from the admin panel
+7. Add marker lifetime policy management controls
+
+**Phase 6: UI Polish & Future Features Prep**
 
 1. Mobile-first styling with TailwindCSS
 2. Bottom navigation for mobile

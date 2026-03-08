@@ -7,9 +7,10 @@ use App\Models\Marker;
 use App\Models\MarkerImage;
 use App\Models\MarkerReport;
 use App\Models\MarkerVote;
+use App\Services\MarkerLifetimeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class MarkerController extends Controller
@@ -102,7 +103,9 @@ class MarkerController extends Controller
             ], 422);
         }
 
-        $expiresAt = Carbon::now()->addWeek();
+        $lifetimeService = app(MarkerLifetimeService::class);
+        $policy = $lifetimeService->resolvePolicy($validated['category']);
+        $lifetime = $lifetimeService->buildInitialLifetime($policy);
 
         $marker = Marker::create([
             'user_id' => $user->id,
@@ -111,7 +114,10 @@ class MarkerController extends Controller
             'address' => $validated['address'] ?? null,
             'category' => $validated['category'],
             'description' => $validated['description'],
-            'expires_at' => $expiresAt,
+            'expires_at' => $lifetime['expires_at'],
+            'base_expires_at' => $lifetime['base_expires_at'],
+            'max_expires_at' => $lifetime['max_expires_at'],
+            'policy_snapshot' => $policy,
         ]);
 
         if (! empty($validated['images'])) {
@@ -136,53 +142,71 @@ class MarkerController extends Controller
 
         $user = $request->user();
         $newType = $validated['vote_type'];
+        $lifetimeService = app(MarkerLifetimeService::class);
 
-        $existingVote = MarkerVote::where('marker_id', $marker->id)
-            ->where('user_id', $user->id)
-            ->first();
+        $voteResult = DB::transaction(function () use ($marker, $user, $newType, $lifetimeService) {
+            $lockedMarker = Marker::query()
+                ->whereKey($marker->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        $oldType = $existingVote?->vote_type;
+            $existingVote = MarkerVote::query()
+                ->where('marker_id', $lockedMarker->id)
+                ->where('user_id', $user->id)
+                ->lockForUpdate()
+                ->first();
 
-        $userVoteType = $newType;
+            $oldType = $existingVote?->vote_type;
+            $updatedUserVoteType = $newType;
 
-        if ($oldType === $newType && $existingVote) {
-            // Repeating the same vote toggles it off.
-            $existingVote->delete();
-
-            if ($oldType === MarkerVote::VOTE_STILL_THERE && $marker->likes > 0) {
-                $marker->decrement('likes');
-            } elseif ($oldType === MarkerVote::VOTE_NOT_THERE && $marker->dislikes > 0) {
-                $marker->decrement('dislikes');
+            if ($oldType === $newType && $existingVote) {
+                $existingVote->delete();
+                $updatedUserVoteType = null;
+            } else {
+                MarkerVote::updateOrCreate(
+                    [
+                        'marker_id' => $lockedMarker->id,
+                        'user_id' => $user->id,
+                    ],
+                    ['vote_type' => $newType]
+                );
             }
 
-            $userVoteType = null;
-        } else {
-            MarkerVote::updateOrCreate(
-                [
-                    'marker_id' => $marker->id,
-                    'user_id' => $user->id,
-                ],
-                ['vote_type' => $newType]
-            );
+            $likes = (int) $lockedMarker->likes;
+            $dislikes = (int) $lockedMarker->dislikes;
 
-            if ($oldType !== $newType) {
-                if ($oldType === MarkerVote::VOTE_STILL_THERE && $marker->likes > 0) {
-                    $marker->decrement('likes');
-                } elseif ($oldType === MarkerVote::VOTE_NOT_THERE && $marker->dislikes > 0) {
-                    $marker->decrement('dislikes');
-                }
-
-                if ($newType === MarkerVote::VOTE_STILL_THERE) {
-                    $marker->increment('likes');
-                } elseif ($newType === MarkerVote::VOTE_NOT_THERE) {
-                    $marker->increment('dislikes');
-                }
+            if ($oldType === MarkerVote::VOTE_STILL_THERE) {
+                $likes = max(0, $likes - 1);
+            } elseif ($oldType === MarkerVote::VOTE_NOT_THERE) {
+                $dislikes = max(0, $dislikes - 1);
             }
-        }
+
+            if ($updatedUserVoteType === MarkerVote::VOTE_STILL_THERE) {
+                $likes++;
+            } elseif ($updatedUserVoteType === MarkerVote::VOTE_NOT_THERE) {
+                $dislikes++;
+            }
+
+            $lockedMarker->likes = $likes;
+            $lockedMarker->dislikes = $dislikes;
+
+            $policy = $lifetimeService->resolvePolicy($lockedMarker->category);
+            $lifetimeService->applyVoteLifetime($lockedMarker, $policy, $oldType, $updatedUserVoteType);
+            $lockedMarker->save();
+
+            return [
+                'user_vote_type' => $updatedUserVoteType,
+                'marker_id' => $lockedMarker->id,
+            ];
+        });
+
+        $updatedMarker = Marker::query()
+            ->with(['images', 'user:id,name'])
+            ->findOrFail($voteResult['marker_id']);
 
         return response()->json([
-            'data' => $marker->fresh(['images', 'user:id,name']),
-            'user_vote_type' => $userVoteType,
+            'data' => $updatedMarker,
+            'user_vote_type' => $voteResult['user_vote_type'],
             'message' => 'Vote recorded.',
         ]);
     }

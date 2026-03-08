@@ -141,6 +141,108 @@ class VoteMarkerTest extends TestCase
             ->assertJsonPath('data.0.user_vote_type', null);
     }
 
+    public function test_still_there_vote_extends_marker_expiry(): void
+    {
+        $user = User::factory()->create();
+        $marker = $this->createMarker();
+        $marker->forceFill([
+            'created_at' => now()->subHours(2),
+            'updated_at' => now()->subHours(2),
+            'expires_at' => now()->addHours(4),
+            'base_expires_at' => now()->addHours(4),
+            'max_expires_at' => now()->addDays(7),
+        ])->saveQuietly();
+
+        $before = $marker->expires_at->copy();
+        Sanctum::actingAs($user);
+
+        $this->postJson("/api/markers/{$marker->id}/vote", [
+            'vote_type' => MarkerVote::VOTE_STILL_THERE,
+        ])->assertOk();
+
+        $marker->refresh();
+        $this->assertTrue($marker->expires_at->gt($before));
+    }
+
+    public function test_not_there_vote_reduces_marker_expiry_after_grace_window(): void
+    {
+        $user = User::factory()->create();
+        $marker = $this->createMarker();
+        $marker->forceFill([
+            'created_at' => now()->subHours(2),
+            'updated_at' => now()->subHours(2),
+            'expires_at' => now()->addHours(6),
+            'base_expires_at' => now()->addHours(6),
+            'max_expires_at' => now()->addDays(7),
+        ])->saveQuietly();
+
+        $before = $marker->expires_at->copy();
+        Sanctum::actingAs($user);
+
+        $this->postJson("/api/markers/{$marker->id}/vote", [
+            'vote_type' => MarkerVote::VOTE_NOT_THERE,
+        ])->assertOk();
+
+        $marker->refresh();
+        $this->assertTrue($marker->expires_at->lt($before));
+    }
+
+    public function test_not_there_quorum_triggers_early_expiry(): void
+    {
+        $marker = $this->createMarker();
+        $marker->forceFill([
+            'created_at' => now()->subHours(3),
+            'updated_at' => now()->subHours(3),
+            'expires_at' => now()->addDays(2),
+            'base_expires_at' => now()->addDays(2),
+            'max_expires_at' => now()->addDays(7),
+        ])->saveQuietly();
+
+        $voteTypes = [
+            MarkerVote::VOTE_NOT_THERE,
+            MarkerVote::VOTE_NOT_THERE,
+            MarkerVote::VOTE_NOT_THERE,
+            MarkerVote::VOTE_NOT_THERE,
+            MarkerVote::VOTE_STILL_THERE,
+        ];
+
+        foreach ($voteTypes as $voteType) {
+            $user = User::factory()->create();
+            Sanctum::actingAs($user);
+
+            $this->postJson("/api/markers/{$marker->id}/vote", [
+                'vote_type' => $voteType,
+            ])->assertOk();
+        }
+
+        $marker->refresh();
+        $this->assertTrue($marker->expires_at->lte(now()->addMinutes(1)));
+    }
+
+    public function test_not_there_ratio_does_not_force_early_expiry_below_quorum(): void
+    {
+        $marker = $this->createMarker();
+        $marker->forceFill([
+            'created_at' => now()->subHours(3),
+            'updated_at' => now()->subHours(3),
+            'expires_at' => now()->addDays(2),
+            'base_expires_at' => now()->addDays(2),
+            'max_expires_at' => now()->addDays(7),
+        ])->saveQuietly();
+
+        foreach (range(1, 4) as $i) {
+            $user = User::factory()->create();
+            Sanctum::actingAs($user);
+
+            $this->postJson("/api/markers/{$marker->id}/vote", [
+                'vote_type' => MarkerVote::VOTE_NOT_THERE,
+            ])->assertOk();
+        }
+
+        $marker->refresh();
+        $this->assertTrue($marker->expires_at->gt(now()->addMinutes(1)));
+    }
+
     private function createMarker(): Marker
     {
         $owner = User::factory()->create();
@@ -153,7 +255,20 @@ class VoteMarkerTest extends TestCase
             'description' => 'Test marker',
             'likes' => 0,
             'dislikes' => 0,
-            'expires_at' => now()->addWeek(),
+            'expires_at' => now()->addHours(4),
+            'base_expires_at' => now()->addHours(4),
+            'max_expires_at' => now()->addDays(7),
+            'policy_snapshot' => [
+                'base_lifetime_minutes' => 240,
+                'min_lifetime_minutes' => 60,
+                'max_lifetime_minutes' => 10080,
+                'still_there_extension_minutes' => 30,
+                'not_there_reduction_minutes' => 45,
+                'grace_period_minutes' => 30,
+                'early_expiry_quorum' => 5,
+                'early_expiry_not_there_ratio' => 0.8,
+                'early_expiry_minutes' => 0,
+            ],
         ]);
     }
 }

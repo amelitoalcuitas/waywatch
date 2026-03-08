@@ -23,6 +23,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $this->call(SuperUserSeeder::class);
+        $this->call(MarkerLifetimePolicySeeder::class);
         $this->call(MarkerSeeder::class);
     }
 }

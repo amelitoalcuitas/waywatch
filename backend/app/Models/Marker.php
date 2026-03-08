@@ -18,6 +18,9 @@ class Marker extends Model
         'likes',
         'dislikes',
         'expires_at',
+        'base_expires_at',
+        'max_expires_at',
+        'policy_snapshot',
     ];
 
     protected function casts(): array
@@ -26,6 +29,9 @@ class Marker extends Model
             'latitude' => 'decimal:8',
             'longitude' => 'decimal:8',
             'expires_at' => 'datetime',
+            'base_expires_at' => 'datetime',
+            'max_expires_at' => 'datetime',
+            'policy_snapshot' => 'array',
         ];
     }
 

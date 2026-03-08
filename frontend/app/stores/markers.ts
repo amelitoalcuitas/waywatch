@@ -1,9 +1,5 @@
 import { defineStore } from 'pinia';
-import {
-  boundsToParams,
-  fetchMarkers,
-  formatDateForInput
-} from '~/composables/useMarkers';
+import { boundsToParams, fetchMarkers } from '~/composables/useMarkers';
 import type { BoundsParams, Marker } from '~/composables/useMarkers';
 
 type BoundsLike = {
@@ -16,7 +12,7 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 export const useMarkersStore = defineStore('markers', {
   state: () => ({
     selectedCategory: 'all',
-    selectedDate: formatDateForInput(new Date()),
+    selectedDate: '',
     boundsParams: null as BoundsParams | null,
     markers: [] as Marker[],
     pending: false
