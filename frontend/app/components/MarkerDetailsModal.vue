@@ -1,18 +1,11 @@
 <template>
-  <UModal
-    v-if="isDesktop"
-    v-model:open="open"
-    title="Report Details"
-    :ui="{ footer: 'justify-stretch' }"
-  >
+  <UModal v-if="isDesktop" v-model:open="open" title="Report Details" :ui="{ footer: 'justify-stretch' }">
     <template #body>
       <div v-if="marker" class="space-y-4">
         <div>
           <p class="text-xs font-medium text-gray-500">Category</p>
-          <span
-            class="inline-flex mt-1 rounded px-2 py-0.5 text-sm font-medium text-white"
-            :style="{ backgroundColor: getCategoryColor(marker.category) }"
-          >
+          <span class="inline-flex mt-1 rounded px-2 py-0.5 text-sm font-medium text-white"
+            :style="{ backgroundColor: getCategoryColor(marker.category) }">
             {{ formatCategory(marker.category) }}
           </span>
         </div>
@@ -44,18 +37,10 @@
         <div v-if="marker.images?.length" class="space-y-2">
           <p class="text-xs font-medium text-gray-500">Photos</p>
           <div class="flex flex-wrap gap-2">
-            <button
-              v-for="(img, idx) in marker.images"
-              :key="img.id"
-              type="button"
+            <button v-for="(img, idx) in marker.images" :key="img.id" type="button"
               class="block overflow-hidden rounded-lg ring-2 ring-transparent transition hover:ring-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              @click="openImageViewer(img.image_url, idx)"
-            >
-              <img
-                :src="img.image_url"
-                :alt="`Photo ${idx + 1}`"
-                class="h-20 w-20 object-cover"
-              />
+              @click="openImageViewer(img.image_url, idx)">
+              <img :src="img.image_url" :alt="`Photo ${idx + 1}`" class="h-20 w-20 object-cover" />
             </button>
           </div>
         </div>
@@ -68,20 +53,13 @@
     </template>
   </UModal>
 
-  <UDrawer
-    v-else
-    v-model:open="open"
-    title="Report Details"
-    :ui="{ footer: 'justify-stretch' }"
-  >
+  <UDrawer v-else v-model:open="open" title="Report Details" :ui="{ footer: 'justify-stretch' }">
     <template #body>
       <div v-if="marker" class="space-y-4">
         <div>
           <p class="text-xs font-medium text-gray-500">Category</p>
-          <span
-            class="inline-flex mt-1 rounded px-2 py-0.5 text-sm font-medium text-white"
-            :style="{ backgroundColor: getCategoryColor(marker.category) }"
-          >
+          <span class="inline-flex mt-1 rounded px-2 py-0.5 text-sm font-medium text-white"
+            :style="{ backgroundColor: getCategoryColor(marker.category) }">
             {{ formatCategory(marker.category) }}
           </span>
         </div>
@@ -113,18 +91,10 @@
         <div v-if="marker.images?.length" class="space-y-2">
           <p class="text-xs font-medium text-gray-500">Photos</p>
           <div class="flex flex-wrap gap-2">
-            <button
-              v-for="(img, idx) in marker.images"
-              :key="img.id"
-              type="button"
+            <button v-for="(img, idx) in marker.images" :key="img.id" type="button"
               class="block overflow-hidden rounded-lg ring-2 ring-transparent transition hover:ring-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              @click="openImageViewer(img.image_url, idx)"
-            >
-              <img
-                :src="img.image_url"
-                :alt="`Photo ${idx + 1}`"
-                class="h-20 w-20 object-cover"
-              />
+              @click="openImageViewer(img.image_url, idx)">
+              <img :src="img.image_url" :alt="`Photo ${idx + 1}`" class="h-20 w-20 object-cover" />
             </button>
           </div>
         </div>
@@ -137,12 +107,8 @@
     </template>
   </UDrawer>
 
-  <ImageViewerModal
-    v-model:open="imageViewerOpen"
-    :image-url="selectedImageUrl"
-    :images="marker?.images?.map((i) => i.image_url) ?? []"
-    :initial-index="selectedImageIndex"
-  />
+  <ImageViewerModal :model-value="imageViewerOpen" :image-url="selectedImageUrl"
+    :images="marker?.images?.map((i) => i.image_url) ?? []" :initial-index="selectedImageIndex" />
 </template>
 
 <script setup lang="ts">

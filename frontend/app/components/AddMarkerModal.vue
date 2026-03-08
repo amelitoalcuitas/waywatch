@@ -160,7 +160,7 @@ const open = computed({
   set: (v) => emit('update:modelValue', v)
 });
 
-const RADIUS_KM = 3;
+const RADIUS_KM = 5;
 
 const category = ref('checkpoint');
 const description = ref('');

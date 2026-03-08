@@ -2,20 +2,34 @@
   <ClientOnly>
     <div class="flex h-full w-full flex-col">
       <!-- Row 1: Filters -->
-      <div
-        class="flex shrink-0 items-center justify-between gap-4 px-4 py-3"
-      >
+      <div class="flex shrink-0 items-center justify-between gap-4 px-4 py-3">
         <USelect
           v-model="selectedCategory"
           :items="CATEGORY_OPTIONS"
           placeholder="All categories"
           class="min-w-[140px]"
-        />
+        >
+          <!-- circle for color -->
+
+          <template #item="{ item }">
+            <!-- vertical align the circle with the text -->
+            <div class="flex items-center gap-2 w-full">
+              <div
+                v-if="item.value !== 'all'"
+                class="inline-block w-3 h-3 rounded-full self-center"
+                :style="{ backgroundColor: getCategoryColor(item.value) }"
+              ></div>
+              <span v-else class="w-3 h-3"> </span>
+
+              {{ item.label }}
+            </div>
+          </template>
+        </USelect>
         <DatePicker v-model="selectedDate" />
       </div>
 
       <!-- Row 2: Map -->
-      <div class="relative z-0 shrink-0 overflow-hidden">
+      <div class="relative z-0 h-[50vh] shrink-0 overflow-hidden">
         <MapView
           :markers="markers"
           :focus-marker-id="focusMarkerId"
@@ -58,7 +72,10 @@
                 </p>
                 <p class="mt-1 text-xs text-gray-500">
                   {{ marker.user?.name }} ·
-                  {{ marker.address || formatCoords(marker.latitude, marker.longitude) }}
+                  {{
+                    marker.address ||
+                    formatCoords(marker.latitude, marker.longitude)
+                  }}
                 </p>
               </div>
             </div>
@@ -102,7 +119,7 @@ const store = useMarkersStore();
 const authStore = useAuthStore();
 const { markers, pending } = storeToRefs(store);
 
-const RADIUS_KM = 3;
+const RADIUS_KM = 5;
 
 const showAddModal = ref(false);
 const addMarkerCoords = ref<{ lat: number; lng: number } | null>(null);

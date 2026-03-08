@@ -23,10 +23,10 @@ Markers are **temporary and automatically expire** with a scheduled cleanup week
 
 ## Map Display
 
-- Interactive map using OpenStreetMap
+- Interactive map using MapLibre GL JS with OpenFreeMap Bright tiles
 - Show user's current location
 - Display markers from backend
-- Marker clustering when zoomed out
+- Native GL-based marker clustering when zoomed out
 - Tap marker to view details
 - Filter markers by category
 - Filter markers by **date range**
@@ -108,7 +108,7 @@ Users can only create markers **within a limited radius of their current GPS loc
 Recommended restriction:
 
 ```
-3km radius
+5km radius
 ```
 
 Frontend must request browser geolocation.
@@ -139,13 +139,53 @@ To prevent abuse:
 
 ## Frontend
 
-- Nuxt 3
+- Nuxt 4
 - Vue 3
 - Nuxt UI (always use Nuxt UI components for UI elements)
 - TailwindCSS
-- Leaflet
+- **MapLibre GL JS** (replaces Leaflet)
+- **OpenFreeMap Bright tiles** (replaces OpenStreetMap tile layer)
 - Pinia
-- OpenStreetMap
+
+---
+
+## Map Library
+
+The frontend uses **MapLibre GL JS** for map rendering instead of Leaflet. Key differences and decisions:
+
+- **Vector tiles** are rendered via WebGL, providing smoother zoom and pan compared to raster tiles.
+- **OpenFreeMap Bright** (`https://tiles.openfreemap.org/styles/bright`) is used as the free, open tile and style source — no API key required.
+- **Clustering** is implemented natively using MapLibre's built-in GeoJSON source pipeline (`cluster: true`) rather than an external plugin. This renders cluster bubbles directly on the GL canvas for better performance at scale.
+- Individual unclustered markers are rendered as HTML `Marker` elements so category-colored dots and JS click/popup events are preserved.
+- The component is loaded **client-side only** (`<ClientOnly>` wrapper + dynamic `import('maplibre-gl')` inside `onMounted`) to ensure SSR compatibility with Nuxt 4.
+- **Coordinate order:** MapLibre GL JS uses `[longitude, latitude]` (GeoJSON order), the reverse of Leaflet's `[lat, lng]`. All coordinate handling in the map component follows this convention.
+
+### Installing MapLibre GL JS
+
+```bash
+npm install maplibre-gl
+```
+
+### nuxt.config.ts changes required
+
+```ts
+export default defineNuxtConfig({
+  css: ['maplibre-gl/dist/maplibre-gl.css'],
+  vite: {
+    optimizeDeps: {
+      include: ['maplibre-gl']
+    }
+  }
+});
+```
+
+### Removed dependencies
+
+The following Leaflet-related packages are no longer used and can be removed:
+
+- `leaflet`
+- `vue3-leaflet` (or `@vue-leaflet/vue-leaflet`)
+- Any `useLMarkerCluster` composable
 
 ---
 
@@ -210,7 +250,7 @@ Desktop should adapt responsively.
         ┌──────────┴──────────┐
         │                     │
    Nuxt Frontend        Laravel API
-     (Vue + Leaflet)      (REST)
+  (Vue + MapLibre GL)    (REST)
         │                     │
         │                     │
         └──────────┬──────────┘
@@ -233,10 +273,11 @@ Main components:
 
 ### MapView
 
-- Full screen map
-- Marker clustering
-- User location
-- Marker rendering
+- Full screen map powered by **MapLibre GL JS**
+- Native GL-based marker clustering (GeoJSON source with `cluster: true`)
+- Cluster bubbles rendered on WebGL canvas; individual markers rendered as HTML elements
+- User location marker
+- Marker rendering with category-colored dots
 - Filter markers by category and date
 
 ---
@@ -427,7 +468,8 @@ Example cron job:
 To maintain map performance:
 
 - Only fetch markers within a radius
-- Use marker clustering
+- Use native MapLibre GL JS clustering (GeoJSON source pipeline — no external plugin required)
+- Cluster bubbles rendered on WebGL canvas for high performance at scale
 - Avoid loading full dataset
 - Cache frequently accessed data if needed
 
@@ -480,7 +522,7 @@ waywatch/
 │   ├── php/
 │   │   └── Dockerfile          # Laravel PHP-FPM container
 │   └── node/
-│       └── Dockerfile          # Nuxt 3 SSR container
+│       └── Dockerfile          # Nuxt 4 SSR container
 ├── docker-compose.yml
 └── docker-compose.prod.yml     # Production overrides
 ```
@@ -490,20 +532,19 @@ waywatch/
 ## docker-compose.yml (Development)
 
 ```yaml
-version: "3.9"
+version: '3.9'
 
 services:
-
   # ─── Nginx Reverse Proxy ───────────────────────────────
   nginx:
     image: nginx:alpine
     ports:
-      - "80:80"
+      - '80:80'
     volumes:
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
       - ./backend:/var/www/backend
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - 'host.docker.internal:host-gateway'
     depends_on:
       - backend
     networks:
@@ -525,7 +566,7 @@ services:
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_HOST: redis
-      AWS_ENDPOINT: ${AWS_ENDPOINT}         # S3-compatible object storage
+      AWS_ENDPOINT: ${AWS_ENDPOINT} # S3-compatible object storage
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       AWS_BUCKET: ${AWS_BUCKET}
@@ -603,14 +644,14 @@ networks:
 
 ## Service Summary
 
-| Service     | Image / Build         | Purpose                                      |
-|-------------|-----------------------|----------------------------------------------|
-| `nginx`     | `nginx:alpine`        | Reverse proxy, routes `/api` to backend, `/` to local frontend (port 3000) |
-| `backend`   | Custom PHP-FPM        | Laravel REST API, authentication, marker logic |
-| `db`        | `postgres:16-alpine`  | Primary data store (markers, users, votes)   |
-| `redis`     | `redis:7-alpine`      | Queue driver and optional response caching   |
-| `queue`     | Same as backend       | Processes background jobs (e.g., image cleanup) |
-| `scheduler` | Same as backend       | Runs Laravel Scheduler every 60s for weekly cleanup |
+| Service     | Image / Build        | Purpose                                                                    |
+| ----------- | -------------------- | -------------------------------------------------------------------------- |
+| `nginx`     | `nginx:alpine`       | Reverse proxy, routes `/api` to backend, `/` to local frontend (port 3000) |
+| `backend`   | Custom PHP-FPM       | Laravel REST API, authentication, marker logic                             |
+| `db`        | `postgres:16-alpine` | Primary data store (markers, users, votes)                                 |
+| `redis`     | `redis:7-alpine`     | Queue driver and optional response caching                                 |
+| `queue`     | Same as backend      | Processes background jobs (e.g., image cleanup)                            |
+| `scheduler` | Same as backend      | Runs Laravel Scheduler every 60s for weekly cleanup                        |
 
 ---
 
@@ -688,6 +729,7 @@ AWS_BUCKET=waywatch-images
 Follow these steps to run WayWatch locally using Docker and the Nuxt dev server:
 
 1. **Copy environment file and generate app key**
+
    ```bash
    cp backend/.env.example backend/.env
    cd backend
@@ -696,6 +738,7 @@ Follow these steps to run WayWatch locally using Docker and the Nuxt dev server:
    ```
 
 2. **Install dependencies**
+
    ```bash
    cd backend
    composer install
@@ -705,27 +748,33 @@ Follow these steps to run WayWatch locally using Docker and the Nuxt dev server:
    ```
 
 3. **Start Docker services (backend, database, Redis, nginx)**
+
    ```bash
    docker compose up -d
    ```
 
 4. **Run database migrations**
+
    ```bash
    docker compose exec backend php artisan migrate
    ```
 
 5. **Seed initial data (optional but recommended)**
+
    ```bash
    docker compose exec backend php artisan db:seed
    ```
 
 6. **Create the storage symlink (required for image uploads)**
+
    ```bash
    docker compose exec backend php artisan storage:link
    ```
+
    This command fixes issues where marker image uploads fail with a 500 error by ensuring `public/storage` is correctly linked to `storage/app/public`.
 
 7. **Run the frontend dev server**
+
    ```bash
    cd frontend
    npm run dev
@@ -814,18 +863,19 @@ waywatch/
 │   │   └── seeders/
 │   └── routes/
 │       └── api.php
-├── frontend/                 # Nuxt 3 + Vue 3
-│   ├── components/
-│   │   ├── MapView.vue
-│   │   ├── AddMarkerModal.vue
-│   │   ├── MarkerDetails.vue
-│   │   └── Navigation.vue
+├── frontend/                 # Nuxt 4 + Vue 3
+│   ├── app/
+│   │   └── components/
+│   │       ├── MapView.vue         # MapLibre GL JS map component
+│   │       ├── AddMarkerModal.vue
+│   │       ├── MarkerDetails.vue
+│   │       └── Navigation.vue
 │   ├── pages/
 │   │   ├── index.vue         # Main map page
 │   │   ├── login.vue
 │   │   └── register.vue
-│   └── plugins/
-│       └── leaflet.js
+│   └── composables/
+│       └── useMarkers.ts     # Marker types and category colors
 ├── docker/                   # Docker configuration
 │   ├── nginx/
 │   │   └── default.conf
@@ -839,6 +889,8 @@ waywatch/
 ├── README.md
 └── package.json / composer.json
 ```
+
+> **Note:** There is no `plugins/leaflet.js` — MapLibre GL JS is imported dynamically inside the map component via `import('maplibre-gl')` within `onMounted`, which is the correct SSR-safe pattern for Nuxt 4. No plugin file is needed.
 
 ---
 
@@ -854,11 +906,12 @@ waywatch/
 
 **Phase 2: Setup Frontend & Map**
 
-1. Initialize Nuxt 3 project
-2. Configure Leaflet with OpenStreetMap tiles
-3. Create main map page (`index.vue`)
-4. Fetch and display markers from API
-5. Add marker clustering
+1. Initialize Nuxt 4 project
+2. Install and configure **MapLibre GL JS** with **OpenFreeMap Bright** tiles
+3. Add `maplibre-gl/dist/maplibre-gl.css` to `nuxt.config.ts`
+4. Create main map page (`index.vue`)
+5. Fetch and display markers from API
+6. Implement native GL-based marker clustering via GeoJSON source
 
 **Phase 3: Marker Actions**
 
