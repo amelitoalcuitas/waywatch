@@ -99,6 +99,30 @@ Rules:
 - Votes help determine whether a report remains active and can influence marker lifetime
 - Only **registered users** can vote
 
+### Current Lifetime Logic
+
+WayWatch currently uses a **DB-backed lifetime policy** (`marker_lifetime_policies`) applied at marker creation and re-evaluated on vote changes.
+
+- **Base lifetime by category**:
+  - `traffic`: 4 hours
+  - `accident`: 6 hours
+  - `hazard`: 18 hours
+  - `flood`: 24 hours
+  - `checkpoint`: 48 hours
+  - `road_repair`: 72 hours
+- **Global policy defaults**:
+  - Minimum lifetime floor: 60 minutes from `created_at`
+  - Maximum lifetime cap: 7 days from `created_at`
+  - `Still there` vote effect: +30 minutes
+  - `Not there` vote effect: -45 minutes
+  - Grace period: first 30 minutes (negative reductions are ignored)
+- **Early expiry rule**:
+  - Requires quorum of at least **5 total votes**
+  - If `not_there / total_votes >= 0.8`, marker is force-expired immediately
+- **Visibility and cleanup**:
+  - Marker is hidden once `expires_at <= now()`
+  - Expired markers are physically removed by scheduled cleanup (hourly)
+
 ---
 
 ## Location Restrictions
@@ -120,6 +144,7 @@ Backend must validate the distance before accepting the marker.
 ## User System
 
 - **Registration and login required** for adding markers, voting, or other interactions
+- Support **Google authentication (OAuth)** as an additional sign-in/sign-up method
 - Guests can view the map and markers freely
 - Main page is the **map view**
 - User database prepared for future features
@@ -314,6 +339,7 @@ Includes:
 - User registration
 - User login
 - Password reset
+- Google sign in / sign up
 
 ---
 
@@ -940,7 +966,17 @@ waywatch/
 6. Add delete action for reported markers from the admin panel
 7. Add marker lifetime policy management controls
 
-**Phase 6: UI Polish & Future Features Prep**
+**Phase 6: Account Recovery & Email System**
+
+1. Implement account registration flow end-to-end (frontend forms, backend validation, API integration, and success/error UX)
+2. Implement forgot password request flow (request reset link, token generation/storage, and secure reset link handling)
+3. Implement reset password flow (token verification, new password submission, and password policy validation)
+4. Implement Google authentication (OAuth 2.0) for sign in/sign up, account linking rules, and secure callback handling
+5. Configure transactional email delivery for auth flows (registration-related notifications as needed and password reset emails)
+6. Add email templates and environment-based mail provider configuration (local/dev/prod)
+7. Test and verify registration, Google auth, and password recovery flows including email delivery and failure handling
+
+**Phase 7: UI Polish & Future Features Prep**
 
 1. Mobile-first styling with TailwindCSS
 2. Bottom navigation for mobile

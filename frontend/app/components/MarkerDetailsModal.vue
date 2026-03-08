@@ -257,7 +257,6 @@
               :disabled="deleting"
               @click="openDeleteDialog"
             >
-              Delete
             </UButton>
           </div>
         </div>

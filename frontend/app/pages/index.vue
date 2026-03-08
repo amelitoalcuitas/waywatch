@@ -115,12 +115,20 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia';
 import { useMarkersStore } from '~/stores/markers';
-import { CATEGORY_OPTIONS, getCategoryColor } from '~/composables/useMarkers';
+import {
+  CATEGORY_OPTIONS,
+  formatDateForInput,
+  getCategoryColor
+} from '~/composables/useMarkers';
 import type { Marker } from '~/composables/useMarkers';
 
 const store = useMarkersStore();
 const authStore = useAuthStore();
 const { markers, pending } = storeToRefs(store);
+
+if (import.meta.client && !store.selectedDate) {
+  store.setDate(formatDateForInput(new Date()));
+}
 
 const RADIUS_KM = 5;
 
