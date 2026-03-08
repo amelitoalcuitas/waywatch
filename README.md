@@ -29,7 +29,7 @@ Markers are **temporary and automatically expire** with a scheduled cleanup week
 - Native GL-based marker clustering when zoomed out
 - Tap marker to view details
 - Filter markers by category
-- Filter markers by **date range**
+- Filter markers by **date**
 
 ---
 
@@ -57,8 +57,8 @@ Each marker includes:
 - Images (max 6)
 - Created timestamp
 - Expiration timestamp
-- Likes
-- Dislikes
+- Still there votes
+- Not there votes
 
 Markers will **remain visible until cleaned up weekly**. Users can filter markers by date to analyze historical data.
 
@@ -86,17 +86,17 @@ Requirements:
 
 ## Voting System
 
-Users can vote on markers to indicate credibility.
+Users can vote on markers to indicate whether the report is still present.
 
 Vote types:
 
-- Like
-- Dislike
+- Still there
+- Not there
 
 Rules:
 
 - One vote per user per marker
-- Votes help determine marker credibility
+- Votes help determine whether a report remains active
 - Only **registered users** can vote
 
 ---
@@ -305,7 +305,7 @@ Includes:
 - Images
 - Description
 - Category
-- Like / Dislike buttons (restricted to logged-in users)
+- Still there / Not there buttons (restricted to logged-in users)
 
 ---
 
@@ -351,8 +351,8 @@ latitude
 longitude
 category
 description
-likes
-dislikes
+still_there_count
+not_there_count
 expires_at
 created_at
 updated_at
@@ -403,7 +403,7 @@ start_date (optional)
 end_date (optional)
 ```
 
-Returns markers within the radius and optional date range.
+Returns markers within the radius and optional date filtering.
 
 ---
 
@@ -436,7 +436,7 @@ POST /api/markers/{id}/vote
 Payload:
 
 ```
-vote_type (like | dislike)
+vote_type (still_there | not_there)
 ```
 
 Requires authentication.
@@ -833,7 +833,7 @@ This project prioritizes:
 - Cost efficiency
 - Scalability
 
-Focus on delivering a **working MVP first**, with **weekly marker cleanup** and **date filters** for analysis.  
+Focus on delivering a **working MVP first**, with **weekly marker cleanup** and **single-date filters** for analysis.  
 Future features like **route planning and directions** will build upon the existing database and map framework.
 
 ---
@@ -843,6 +843,8 @@ Future features like **route planning and directions** will build upon the exist
 **Always use Nuxt UI components** for buttons, inputs, modals, cards, and other UI elements. Prefer Nuxt UI primitives over custom HTML or other component libraries.
 
 Every new UI element that can be reused should be extracted into its own component. Place reusable components in `frontend/app/components/` so they can be shared across pages and composed into larger views.
+
+When implementing large or complex logic, extract it into a separate file instead of keeping it inline in a page/component. Use `frontend/app/composables/` for reusable frontend logic and keep components focused on presentation and wiring.
 
 ---
 
@@ -921,11 +923,11 @@ waywatch/
 4. Add category selection and description
 5. Implement location radius check
 
-**Phase 4: Voting & Date Filters**
+**Phase 4: Voting & Date Filter**
 
 1. Add voting buttons in MarkerDetails
 2. Restrict votes to authenticated users
-3. Add filter for date ranges on markers
+3. Keep and polish single-date filtering on markers
 4. Test API for fetching filtered markers
 
 **Phase 5: UI Polish & Future Features Prep**

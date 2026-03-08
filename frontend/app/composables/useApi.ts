@@ -1,32 +1,33 @@
 export function useApi() {
-  const config = useRuntimeConfig()
-  const apiBase = config.public.apiBase as string
-  const authStore = useAuthStore()
+  const apiBase = useApiBase();
+  const authStore = useAuthStore();
 
   function authHeaders(): Record<string, string> {
-    const headers: Record<string, string> = {}
+    const headers: Record<string, string> = {};
     if (authStore.token) {
-      headers.Authorization = `Bearer ${authStore.token}`
+      headers.Authorization = `Bearer ${authStore.token}`;
     }
-    return headers
+    return headers;
   }
 
   async function apiFetch<T>(
     path: string,
     options: {
-      method?: string
-      body?: Record<string, unknown>
-      query?: Record<string, string | number>
+      method?: string;
+      body?: Record<string, unknown>;
+      query?: Record<string, string | number>;
     } = {}
   ): Promise<T> {
-    const { method = 'GET', body, query } = options
-    const url = path.startsWith('http') ? path : `${apiBase}${path.startsWith('/') ? '' : '/'}${path}`
+    const { method = 'GET', body, query } = options;
+    const url = path.startsWith('http')
+      ? path
+      : `${apiBase}${path.startsWith('/') ? '' : '/'}${path}`;
     return $fetch<T>(url, {
       method,
       body,
       query,
-      headers: authHeaders(),
-    })
+      headers: authHeaders()
+    });
   }
 
   async function apiFetchForm<T>(
@@ -34,15 +35,17 @@ export function useApi() {
     formData: FormData,
     options: { method?: string } = {}
   ): Promise<T> {
-    const { method = 'POST' } = options
-    const url = path.startsWith('http') ? path : `${apiBase}${path.startsWith('/') ? '' : '/'}${path}`
-    const headers = authHeaders()
+    const { method = 'POST' } = options;
+    const url = path.startsWith('http')
+      ? path
+      : `${apiBase}${path.startsWith('/') ? '' : '/'}${path}`;
+    const headers = authHeaders();
     return $fetch<T>(url, {
       method,
       body: formData,
-      headers,
-    })
+      headers
+    });
   }
 
-  return { apiBase, authHeaders, apiFetch, apiFetchForm }
+  return { apiBase, authHeaders, apiFetch, apiFetchForm };
 }

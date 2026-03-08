@@ -6,14 +6,21 @@ export default defineNuxtConfig({
   app: {
     head: {
       title: 'WayWatch',
-      meta: [{ name: 'description', content: 'WayWatch' }]
+      meta: [
+        {
+          name: 'viewport',
+          content:
+            'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no'
+        }
+      ]
     }
   },
   modules: ['@pinia/nuxt', '@nuxt/ui', '@tailwindcss/postcss'],
   css: ['~/assets/css/main.css', 'maplibre-gl/dist/maplibre-gl.css'],
   runtimeConfig: {
     public: {
-      apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://localhost/api'
+      apiBase:
+        import.meta.env.NUXT_PUBLIC_API_BASE || 'http://localhost:8080/api'
     }
   },
   vite: {
@@ -21,6 +28,16 @@ export default defineNuxtConfig({
       hmr: true,
       watch: {
         usePolling: true
+      },
+      proxy: {
+        '/api': {
+          target: 'http://localhost:8080',
+          changeOrigin: true
+        },
+        '/storage': {
+          target: 'http://localhost:8080',
+          changeOrigin: true
+        }
       }
     },
     optimizeDeps: {

@@ -131,9 +131,7 @@
 </template>
 
 <script setup lang="ts">
-import imageCompression from 'browser-image-compression';
 import { createReusableTemplate, useMediaQuery } from '@vueuse/core';
-import { reverseGeocode } from '~/composables/useGeocoding';
 import { CATEGORY_OPTIONS } from '~/composables/useMarkers';
 import type { Marker } from '~/composables/useMarkers';
 
@@ -152,213 +150,44 @@ const emit = defineEmits<{
   'created': [marker: Marker];
 }>();
 
-const { apiFetch, apiFetchForm } = useApi();
-const authStore = useAuthStore();
-
 const open = computed({
   get: () => props.modelValue,
   set: (v) => emit('update:modelValue', v)
 });
 
-const RADIUS_KM = 5;
-
-const category = ref('checkpoint');
-const description = ref('');
-const position = ref<{ lat: number; lng: number } | null>(null);
-const userGps = ref<{ lat: number; lng: number } | null>(null);
-const address = ref<string | null>(null);
-const addressLoading = ref(false);
-const locationError = ref('');
-const submitError = ref('');
-const submitting = ref(false);
-const fileInputRef = ref<HTMLInputElement | null>(null);
-const imageFiles = ref<Array<{ file: File; preview: string }>>([]);
-
-function onFileSelect(e: Event) {
-  const input = e.target as HTMLInputElement;
-  const files = input.files;
-  if (!files?.length) return;
-  const remaining = 6 - imageFiles.value.length;
-  for (let i = 0; i < Math.min(files.length, remaining); i++) {
-    const file = files[i];
-    if (!file || !file.type.startsWith('image/')) continue;
-    imageFiles.value.push({
-      file,
-      preview: URL.createObjectURL(file)
-    });
-  }
-  input.value = '';
-}
-
-function removeImage(idx: number) {
-  const item = imageFiles.value[idx];
-  if (item) URL.revokeObjectURL(item.preview);
-  imageFiles.value.splice(idx, 1);
-}
-
-function haversineDistanceKm(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-): number {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) ** 2;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
-function close() {
-  emit('update:modelValue', false);
-}
-
-async function getLocation(): Promise<{ lat: number; lng: number } | null> {
-  return new Promise((resolve) => {
-    if (!navigator.geolocation) {
-      locationError.value = 'Geolocation is not supported by your browser.';
-      resolve(null);
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-      },
-      (err) => {
-        if (err.code === 1) {
-          locationError.value =
-            'Location access denied. Please enable location to add a report.';
-        } else {
-          locationError.value =
-            'Could not get your location. Please try again.';
-        }
-        resolve(null);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-    );
-  });
-}
-
-async function onSubmit() {
-  if (!position.value || !userGps.value || !authStore.token) return;
-  submitError.value = '';
-  submitting.value = true;
-  try {
-    const imagePaths: string[] = [];
-    for (const item of imageFiles.value) {
-      const compressed = await imageCompression(item.file, {
-        maxSizeMB: 1,
-        maxWidthOrHeight: 1200,
-        useWebWorker: true
-      });
-      const formData = new FormData();
-      formData.append('image', compressed);
-      const res = await apiFetchForm<{ path: string; url: string }>(
-        '/markers/images/upload',
-        formData
-      );
-      imagePaths.push(res.path);
-    }
-
-    const body: Record<string, unknown> = {
-      latitude: position.value.lat,
-      longitude: position.value.lng,
-      user_latitude: userGps.value.lat,
-      user_longitude: userGps.value.lng,
-      address: address.value || undefined,
-      category: category.value,
-      description: description.value.trim()
-    };
-    if (imagePaths.length > 0) {
-      body.images = imagePaths;
-    }
-
-    const res = await apiFetch<{ data: Marker }>('/markers', {
-      method: 'POST',
-      body
-    });
-    emit('created', res.data);
-    category.value = 'road_repair';
-    description.value = '';
-    imageFiles.value.forEach((i) => URL.revokeObjectURL(i.preview));
-    imageFiles.value = [];
-    close();
-  } catch (e: any) {
-    const data = e?.data;
-    if (data?.errors) {
-      const firstError = Object.values(data.errors).flat()[0];
-      submitError.value =
-        typeof firstError === 'string' ? firstError : 'Validation failed.';
-    } else if (data?.message) {
-      submitError.value = data.message;
-    } else if (e?.statusCode === 401) {
-      submitError.value = 'Session expired. Please log in again.';
-    } else {
-      submitError.value = 'Failed to submit report. Please try again.';
-    }
-  } finally {
-    submitting.value = false;
-  }
-}
-
-async function fetchAddress(lat: number, lng: number) {
-  address.value = null;
-  addressLoading.value = true;
-  try {
-    const result = await reverseGeocode(lat, lng);
-    address.value = result;
-  } finally {
-    addressLoading.value = false;
-  }
-}
+const {
+  category,
+  description,
+  position,
+  userGps,
+  address,
+  addressLoading,
+  locationError,
+  submitError,
+  submitting,
+  fileInputRef,
+  imageFiles,
+  onFileSelect,
+  removeImage,
+  onSubmit,
+  initializeForOpen,
+  revokeAllImagePreviews
+} = useAddMarkerForm({
+  getInitialCoordinates: () => props.initialCoordinates,
+  onCreated: (marker: Marker) => emit('created', marker),
+  onClose: () => emit('update:modelValue', false)
+});
 
 watch(
   () => props.modelValue,
   async (open) => {
     if (open) {
-      position.value = null;
-      userGps.value = null;
-      address.value = null;
-      addressLoading.value = false;
-      locationError.value = '';
-      submitError.value = '';
-      imageFiles.value.forEach((i) => URL.revokeObjectURL(i.preview));
-      imageFiles.value = [];
-      const gps = await getLocation();
-      userGps.value = gps;
-      if (props.initialCoordinates) {
-        position.value = props.initialCoordinates;
-        if (gps) {
-          const dist = haversineDistanceKm(
-            props.initialCoordinates.lat,
-            props.initialCoordinates.lng,
-            gps.lat,
-            gps.lng
-          );
-          if (dist > RADIUS_KM) {
-            locationError.value = `Marker must be within ${RADIUS_KM} km of your current location. (${dist.toFixed(1)} km away)`;
-          } else {
-            await fetchAddress(
-              props.initialCoordinates.lat,
-              props.initialCoordinates.lng
-            );
-          }
-        } else {
-          locationError.value =
-            'Location access required to verify the marker is within range.';
-        }
-      } else {
-        position.value = gps;
-        if (gps) {
-          await fetchAddress(gps.lat, gps.lng);
-        }
-      }
+      await initializeForOpen();
     }
   }
 );
+
+onBeforeUnmount(() => {
+  revokeAllImagePreviews();
+});
 </script>

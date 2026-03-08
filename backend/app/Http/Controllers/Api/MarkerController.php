@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Marker;
 use App\Models\MarkerImage;
+use App\Models\MarkerReport;
 use App\Models\MarkerVote;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,6 +28,19 @@ class MarkerController extends Controller
         $query = Marker::query()
             ->with(['images', 'user:id,name'])
             ->where('expires_at', '>', now());
+
+        $authUser = auth('sanctum')->user();
+        if ($authUser) {
+            $query->addSelect([
+                'user_vote_type' => MarkerVote::query()
+                    ->select('vote_type')
+                    ->whereColumn('marker_id', 'markers.id')
+                    ->where('user_id', $authUser->id)
+                    ->limit(1),
+            ]);
+        } else {
+            $query->select('markers.*')->selectRaw('NULL as user_vote_type');
+        }
 
         $latitude = (float) $validated['latitude'];
         $longitude = (float) $validated['longitude'];
@@ -117,7 +131,7 @@ class MarkerController extends Controller
     public function vote(Request $request, Marker $marker): JsonResponse
     {
         $validated = $request->validate([
-            'vote_type' => ['required', 'string', Rule::in(['like', 'dislike'])],
+            'vote_type' => ['required', 'string', Rule::in([MarkerVote::VOTE_STILL_THERE, MarkerVote::VOTE_NOT_THERE])],
         ]);
 
         $user = $request->user();
@@ -129,31 +143,102 @@ class MarkerController extends Controller
 
         $oldType = $existingVote?->vote_type;
 
-        MarkerVote::updateOrCreate(
-            [
-                'marker_id' => $marker->id,
-                'user_id' => $user->id,
-            ],
-            ['vote_type' => $newType]
-        );
+        $userVoteType = $newType;
 
-        if ($oldType !== $newType) {
-            if ($oldType === 'like') {
+        if ($oldType === $newType && $existingVote) {
+            // Repeating the same vote toggles it off.
+            $existingVote->delete();
+
+            if ($oldType === MarkerVote::VOTE_STILL_THERE && $marker->likes > 0) {
                 $marker->decrement('likes');
-            } elseif ($oldType === 'dislike') {
+            } elseif ($oldType === MarkerVote::VOTE_NOT_THERE && $marker->dislikes > 0) {
                 $marker->decrement('dislikes');
             }
-            if ($newType === 'like') {
-                $marker->increment('likes');
-            } elseif ($newType === 'dislike') {
-                $marker->increment('dislikes');
+
+            $userVoteType = null;
+        } else {
+            MarkerVote::updateOrCreate(
+                [
+                    'marker_id' => $marker->id,
+                    'user_id' => $user->id,
+                ],
+                ['vote_type' => $newType]
+            );
+
+            if ($oldType !== $newType) {
+                if ($oldType === MarkerVote::VOTE_STILL_THERE && $marker->likes > 0) {
+                    $marker->decrement('likes');
+                } elseif ($oldType === MarkerVote::VOTE_NOT_THERE && $marker->dislikes > 0) {
+                    $marker->decrement('dislikes');
+                }
+
+                if ($newType === MarkerVote::VOTE_STILL_THERE) {
+                    $marker->increment('likes');
+                } elseif ($newType === MarkerVote::VOTE_NOT_THERE) {
+                    $marker->increment('dislikes');
+                }
             }
         }
 
         return response()->json([
             'data' => $marker->fresh(['images', 'user:id,name']),
+            'user_vote_type' => $userVoteType,
             'message' => 'Vote recorded.',
         ]);
+    }
+
+    public function destroy(Request $request, Marker $marker): JsonResponse
+    {
+        $user = $request->user();
+        $canDelete = $marker->user_id === $user->id || $user->is_admin;
+
+        if (! $canDelete) {
+            return response()->json([
+                'message' => 'You are not allowed to delete this marker.',
+            ], 403);
+        }
+
+        $marker->delete();
+
+        return response()->json([
+            'message' => 'Marker deleted successfully.',
+        ]);
+    }
+
+    public function report(Request $request, Marker $marker): JsonResponse
+    {
+        $validated = $request->validate([
+            'reason' => ['required', 'string', Rule::in(MarkerReport::REASONS)],
+            'details' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $user = $request->user();
+
+        $existingReport = MarkerReport::where('marker_id', $marker->id)
+            ->where('user_id', $user->id)
+            ->exists();
+
+        if ($existingReport) {
+            return response()->json([
+                'message' => 'You have already reported this marker.',
+            ], 422);
+        }
+
+        $report = MarkerReport::create([
+            'marker_id' => $marker->id,
+            'user_id' => $user->id,
+            'reason' => $validated['reason'],
+            'details' => $validated['details'] ?? null,
+        ]);
+
+        return response()->json([
+            'message' => 'Marker reported successfully.',
+            'data' => [
+                'id' => $report->id,
+                'marker_id' => $report->marker_id,
+                'reason' => $report->reason,
+            ],
+        ], 201);
     }
 
     private function haversineSql(float $lat, float $lon, float $radiusKm): string

@@ -8,7 +8,7 @@
       <div class="relative flex h-full w-full items-center justify-center p-4">
         <button
           type="button"
-          class="absolute left-4 top-4 z-10 rounded-full bg-white/10 p-2 text-white transition hover:bg-white/20"
+          class="absolute right-4 top-4 z-10 rounded-full bg-white/10 p-2 text-white transition hover:bg-white/20"
           aria-label="Close"
           @click="close"
         >
@@ -89,59 +89,63 @@
 
 <script setup lang="ts">
 const props = defineProps<{
-  modelValue: boolean
-  imageUrl?: string
-  images?: string[]
-  initialIndex?: number
-}>()
+  modelValue: boolean;
+  imageUrl?: string;
+  images?: string[];
+  initialIndex?: number;
+}>();
 
 const emit = defineEmits<{
-  'update:modelValue': [value: boolean]
-}>()
+  'update:modelValue': [value: boolean];
+}>();
 
 const open = computed({
   get: () => props.modelValue,
   set: (v) => emit('update:modelValue', v)
-})
+});
 
-const images = computed(() => props.images ?? (props.imageUrl ? [props.imageUrl] : []))
-const currentIndex = ref(props.initialIndex ?? 0)
+const images = computed(
+  () => props.images ?? (props.imageUrl ? [props.imageUrl] : [])
+);
+const currentIndex = ref(props.initialIndex ?? 0);
 
-const currentImageUrl = computed(() => images.value[currentIndex.value] ?? '')
+const currentImageUrl = computed(() => images.value[currentIndex.value] ?? '');
 
-const hasPrev = computed(() => images.value.length > 1 && currentIndex.value > 0)
+const hasPrev = computed(
+  () => images.value.length > 1 && currentIndex.value > 0
+);
 const hasNext = computed(
   () => images.value.length > 1 && currentIndex.value < images.value.length - 1
-)
+);
 
 function close() {
-  emit('update:modelValue', false)
+  emit('update:modelValue', false);
 }
 
 function prev() {
-  if (hasPrev.value) currentIndex.value--
+  if (hasPrev.value) currentIndex.value--;
 }
 
 function next() {
-  if (hasNext.value) currentIndex.value++
+  if (hasNext.value) currentIndex.value++;
 }
 
 watch(
   () => props.modelValue,
   (open) => {
     if (open) {
-      const idx = props.initialIndex ?? 0
-      currentIndex.value = Math.min(idx, Math.max(0, images.value.length - 1))
+      const idx = props.initialIndex ?? 0;
+      currentIndex.value = Math.min(idx, Math.max(0, images.value.length - 1));
     }
   }
-)
+);
 
 watch(
   () => props.initialIndex,
   (idx) => {
     if (idx != null && props.modelValue) {
-      currentIndex.value = Math.min(idx, Math.max(0, images.value.length - 1))
+      currentIndex.value = Math.min(idx, Math.max(0, images.value.length - 1));
     }
   }
-)
+);
 </script>

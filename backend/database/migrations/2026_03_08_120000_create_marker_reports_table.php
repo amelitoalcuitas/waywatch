@@ -11,11 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('marker_votes', function (Blueprint $table) {
+        Schema::create('marker_reports', function (Blueprint $table) {
             $table->id();
             $table->foreignId('marker_id')->constrained()->cascadeOnDelete();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->string('vote_type'); // 'still_there' or 'not_there'
+            $table->string('reason');
+            $table->text('details')->nullable();
             $table->timestamps();
 
             $table->unique(['marker_id', 'user_id']);
@@ -27,6 +28,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('marker_votes');
+        Schema::dropIfExists('marker_reports');
     }
 };

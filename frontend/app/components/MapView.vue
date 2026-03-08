@@ -5,8 +5,7 @@
     <button
       type="button"
       class="absolute bottom-2 right-2 z-[1000] flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-lg ring-1 ring-gray-200 transition hover:bg-gray-50 active:scale-95 disabled:opacity-50"
-      :disabled="!userLocation"
-      :title="userLocation ? 'Center on my location' : 'Location unavailable'"
+      :title="userLocation ? 'Center on my location' : 'Enable location'"
       @click="centerOnUserLocation"
     >
       <svg
@@ -28,7 +27,10 @@
 <script setup lang="ts">
 import type { Map as MapLibreMap, Marker as MapLibreMarker } from 'maplibre-gl';
 import type { Marker } from '~/composables/useMarkers';
-import { getCategoryColor } from '~/composables/useMarkers';
+import {
+  formatCategoryLabel,
+  getCategoryColor
+} from '~/composables/useMarkers';
 
 const props = defineProps<{
   markers: Marker[];
@@ -44,6 +46,7 @@ const emit = defineEmits<{
   ];
   mapClick: [coords: { lat: number; lng: number }];
   markerClick: [marker: Marker];
+  locationError: [message: string];
 }>();
 
 const DEFAULT_CENTER: [number, number] = [120.9842, 14.5995];
@@ -58,6 +61,7 @@ const userLocation = ref<[number, number] | null>(null);
 let map: MapLibreMap | null = null;
 let maplibregl: any = null;
 let userMarker: MapLibreMarker | null = null;
+let suppressNextBoundsEmit = false;
 
 const htmlMarkers: Map<number, MapLibreMarker> = new Map();
 
@@ -131,6 +135,10 @@ function createUserEl(): HTMLElement {
 
 function emitBounds() {
   if (!map) return;
+  if (suppressNextBoundsEmit) {
+    suppressNextBoundsEmit = false;
+    return;
+  }
   const b = map.getBounds();
   emit('boundsChange', {
     getCenter: () => ({ lat: b.getCenter().lat, lng: b.getCenter().lng }),
@@ -255,12 +263,14 @@ function syncHtmlMarkers() {
 
       const color = getCategoryColor(marker.category);
       const el = createDotEl(color);
+      const categoryLabel = formatCategoryLabel(marker.category);
+      const description = truncatePopupText(marker.description ?? '', 90);
 
       const locationLine = marker.address
-        ? `<br><small>${marker.address}</small>`
+        ? `<br><small>${escapeHtml(marker.address)}</small>`
         : '';
       const popup = new maplibregl.Popup({ offset: 16 }).setHTML(
-        `<strong>${marker.category}</strong><br>${marker.description ?? ''}${locationLine}`
+        `<strong>${escapeHtml(categoryLabel)}</strong><div style="margin-top:4px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;line-height:1.35;max-width:220px;">${escapeHtml(description)}</div>${locationLine}`
       );
 
       const m: MapLibreMarker = new maplibregl.Marker({ element: el })
@@ -290,6 +300,20 @@ function syncHtmlMarkers() {
   }
 }
 
+function truncatePopupText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, maxChars).trimEnd()}...`;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
 // Throttled version registered with map.on('render')
 const throttledSyncHtmlMarkers = throttle(syncHtmlMarkers, 100);
 
@@ -309,12 +333,89 @@ function updateSource() {
 // ─── Public actions ───────────────────────────────────────────────────────────
 
 function centerOnUserLocation() {
-  if (!map || !userLocation.value) return;
-  map.flyTo({ center: userLocation.value, zoom: 18, duration: 400 });
+  if (!map) return;
+
+  if (userLocation.value) {
+    map.flyTo({ center: userLocation.value, zoom: 18, duration: 400 });
+    return;
+  }
+
+  void requestUserLocation({ centerMap: true, silent: false });
+}
+
+async function getLocationPermissionState(): Promise<PermissionState | null> {
+  if (!('permissions' in navigator) || !navigator.permissions?.query) {
+    return null;
+  }
+
+  try {
+    const status = await navigator.permissions.query({
+      name: 'geolocation'
+    } as PermissionDescriptor);
+    return status.state;
+  } catch {
+    return null;
+  }
+}
+
+function getLocationErrorMessage(
+  permissionState: PermissionState | null
+): string {
+  if (permissionState === 'denied') {
+    return 'Location access is blocked. Enable location for this site in your browser settings.';
+  }
+
+  return 'Unable to access your location. Please allow location permission and try again.';
+}
+
+async function requestUserLocation(options?: {
+  centerMap?: boolean;
+  silent?: boolean;
+}) {
+  if (!navigator.geolocation) {
+    if (!options?.silent) {
+      emit('locationError', 'Geolocation is not supported by your browser.');
+    }
+    return;
+  }
+
+  if (!maplibregl || !map) {
+    return;
+  }
+
+  const permissionState = await getLocationPermissionState();
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      if (!map || !maplibregl) return;
+
+      const coords: [number, number] = [
+        pos.coords.longitude,
+        pos.coords.latitude
+      ];
+
+      userLocation.value = coords;
+      if (options?.centerMap) {
+        map.flyTo({ center: coords, zoom: 13, duration: 400 });
+      }
+
+      userMarker?.remove();
+      userMarker = new maplibregl.Marker({ element: createUserEl() })
+        .setLngLat(coords)
+        .addTo(map);
+    },
+    () => {
+      if (!options?.silent) {
+        emit('locationError', getLocationErrorMessage(permissionState));
+      }
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+  );
 }
 
 function focusOnMarker(marker: Marker) {
   if (!map) return;
+  suppressNextBoundsEmit = true;
   map.flyTo({
     center: [parseFloat(marker.longitude), parseFloat(marker.latitude)],
     zoom: 17,
@@ -349,7 +450,6 @@ onMounted(async () => {
   });
 
   map.on('moveend', emitBounds);
-  map.on('zoomend', emitBounds);
 
   map.on('click', (e) => {
     const hit = map!.queryRenderedFeatures(e.point, {
@@ -358,25 +458,7 @@ onMounted(async () => {
     if (!hit.length) emit('mapClick', { lat: e.lngLat.lat, lng: e.lngLat.lng });
   });
 
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const coords: [number, number] = [
-          pos.coords.longitude,
-          pos.coords.latitude
-        ];
-        userLocation.value = coords;
-        map!.flyTo({ center: coords, zoom: 13, duration: 400 });
-        userMarker?.remove();
-        userMarker = new maplibregl.Marker({ element: createUserEl() })
-          .setLngLat(coords)
-          .addTo(map!);
-      },
-      () => {
-        /* denied */
-      }
-    );
-  }
+  void requestUserLocation({ centerMap: true, silent: true });
 });
 
 onUnmounted(() => {

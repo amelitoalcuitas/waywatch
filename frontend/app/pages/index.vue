@@ -36,6 +36,7 @@
           @bounds-change="onBoundsChange"
           @map-click="onMapClick"
           @marker-click="onMarkerClick"
+          @location-error="onLocationError"
         />
       </div>
 
@@ -98,7 +99,9 @@
       <MarkerDetailsModal
         :model-value="showDetailsModal"
         :marker="selectedMarker"
-        @update:model-value="showDetailsModal = false"
+        @update:model-value="(v) => (showDetailsModal = v)"
+        @marker-updated="onMarkerUpdated"
+        @marker-deleted="onMarkerDeleted"
       />
     </div>
     <template #fallback>
@@ -165,7 +168,14 @@ async function getLocation(): Promise<{ lat: number; lng: number } | null> {
 }
 
 async function onMapClick(coords: { lat: number; lng: number }) {
-  if (!authStore.isAuthenticated) return;
+  if (!authStore.isAuthenticated) {
+    toast.add({
+      title: 'Login required',
+      description: 'Please log in to add a report.',
+      color: 'warning'
+    });
+    return;
+  }
 
   const userLoc = await getLocation();
   if (!userLoc) {
@@ -239,5 +249,31 @@ function focusOnMarker(marker: Marker) {
 function onMarkerClick(marker: Marker) {
   selectedMarker.value = marker;
   showDetailsModal.value = true;
+}
+
+function onMarkerUpdated(updated: Marker) {
+  const idx = store.markers.findIndex((m) => m.id === updated.id);
+  if (idx !== -1) {
+    store.markers[idx] = updated;
+  }
+  selectedMarker.value = updated;
+}
+
+function onMarkerDeleted(markerId: number) {
+  store.markers = store.markers.filter((m) => m.id !== markerId);
+
+  if (selectedMarker.value?.id === markerId) {
+    selectedMarker.value = null;
+  }
+
+  showDetailsModal.value = false;
+}
+
+function onLocationError(message: string) {
+  toast.add({
+    title: 'Location unavailable',
+    description: message,
+    color: 'warning'
+  });
 }
 </script>

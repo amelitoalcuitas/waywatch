@@ -11,9 +11,9 @@
 </template>
 
 <script setup lang="ts">
-const authStore = useAuthStore()
-const toaster = { position: 'top-right' }
+const authStore = useAuthStore();
+const toaster = { position: 'top-center' };
 onMounted(() => {
-  authStore.init()
-})
+  authStore.init();
+});
 </script>

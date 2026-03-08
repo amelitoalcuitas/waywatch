@@ -52,4 +52,9 @@ class Marker extends Model
     {
         return $this->hasMany(MarkerVote::class);
     }
+
+    public function reports(): HasMany
+    {
+        return $this->hasMany(MarkerReport::class);
+    }
 }

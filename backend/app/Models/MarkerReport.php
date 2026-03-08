@@ -5,16 +5,21 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class MarkerVote extends Model
+class MarkerReport extends Model
 {
     protected $fillable = [
         'marker_id',
         'user_id',
-        'vote_type',
+        'reason',
+        'details',
     ];
 
-    public const VOTE_STILL_THERE = 'still_there';
-    public const VOTE_NOT_THERE = 'not_there';
+    public const REASONS = [
+        'spam',
+        'inaccurate',
+        'offensive',
+        'other',
+    ];
 
     public function marker(): BelongsTo
     {

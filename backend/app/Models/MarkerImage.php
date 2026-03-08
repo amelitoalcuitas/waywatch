@@ -18,12 +18,33 @@ class MarkerImage extends Model
         if (! $value) {
             return '';
         }
-        if (str_starts_with($value, 'http://') || str_starts_with($value, 'https://')) {
-            return $value;
-        }
 
         $disk = config('filesystems.default');
         $storageDisk = ($disk === 's3') ? 's3' : 'public';
+
+        // For local/public storage, always emit host-agnostic URLs so
+        // localhost, LAN, and ngrok all resolve against the current origin.
+        if ($storageDisk === 'public') {
+            if (str_starts_with($value, 'http://') || str_starts_with($value, 'https://')) {
+                $urlPath = parse_url($value, PHP_URL_PATH);
+                if (is_string($urlPath) && str_starts_with($urlPath, '/storage/')) {
+                    $relativePath = ltrim(substr($urlPath, strlen('/storage/')), '/');
+                    return '/storage/'.$relativePath;
+                }
+
+                return $value;
+            }
+
+            if (str_starts_with($value, '/storage/')) {
+                return $value;
+            }
+
+            return '/storage/'.ltrim($value, '/');
+        }
+
+        if (str_starts_with($value, 'http://') || str_starts_with($value, 'https://')) {
+            return $value;
+        }
 
         return Storage::disk($storageDisk)->url($value);
     }

@@ -20,5 +20,7 @@ Route::middleware('throttle:60,1')->group(function () {
         Route::post('/markers', [MarkerController::class, 'store']);
         Route::post('/markers/images/upload', [ImageUploadController::class, 'upload']);
         Route::post('/markers/{marker}/vote', [MarkerController::class, 'vote']);
+        Route::post('/markers/{marker}/report', [MarkerController::class, 'report']);
+        Route::delete('/markers/{marker}', [MarkerController::class, 'destroy']);
     });
 });

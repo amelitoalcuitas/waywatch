@@ -17,6 +17,7 @@ class SuperUserSeeder extends Seeder
             [
                 'name' => 'Admin',
                 'password' => 'Password2100!',
+                'is_admin' => true,
             ]
         );
     }

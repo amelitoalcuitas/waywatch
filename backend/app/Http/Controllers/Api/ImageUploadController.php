@@ -24,7 +24,9 @@ class ImageUploadController extends Controller
         $uploadDisk = ($disk === 's3') ? 's3' : 'public';
 
         Storage::disk($uploadDisk)->put($path, $file->get(), 'public');
-        $url = Storage::disk($uploadDisk)->url($path);
+        $url = ($uploadDisk === 'public')
+            ? '/storage/'.$path
+            : Storage::disk($uploadDisk)->url($path);
 
         return response()->json([
             'path' => $path,

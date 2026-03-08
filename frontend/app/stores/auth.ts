@@ -7,6 +7,16 @@ export interface User {
   id: number;
   name: string;
   email: string;
+  is_admin: boolean;
+}
+
+function normalizeUser(
+  user: Omit<User, 'is_admin'> & { is_admin?: boolean }
+): User {
+  return {
+    ...user,
+    is_admin: Boolean(user.is_admin)
+  };
 }
 
 export const useAuthStore = defineStore('auth', {
@@ -27,17 +37,37 @@ export const useAuthStore = defineStore('auth', {
         const storedUser = localStorage.getItem(USER_KEY);
         if (stored) {
           this.token = stored;
-          this.user = storedUser ? (JSON.parse(storedUser) as User) : null;
+          if (
+            !storedUser ||
+            storedUser === 'undefined' ||
+            storedUser === 'null'
+          ) {
+            this.user = null;
+            return;
+          }
+
+          try {
+            const parsed = JSON.parse(storedUser) as
+              | (Omit<User, 'is_admin'> & { is_admin?: boolean })
+              | null;
+            this.user = parsed ? normalizeUser(parsed) : null;
+          } catch {
+            this.user = null;
+            localStorage.removeItem(USER_KEY);
+          }
         }
       }
     },
 
-    setAuth(user: User, token: string) {
-      this.user = user;
+    setAuth(
+      user: Omit<User, 'is_admin'> & { is_admin?: boolean },
+      token: string
+    ) {
+      this.user = normalizeUser(user);
       this.token = token;
       if (import.meta.client) {
         localStorage.setItem(TOKEN_KEY, token);
-        localStorage.setItem(USER_KEY, JSON.stringify(user));
+        localStorage.setItem(USER_KEY, JSON.stringify(this.user));
       }
     },
 
@@ -53,15 +83,14 @@ export const useAuthStore = defineStore('auth', {
     async login(email: string, password: string) {
       this.pending = true;
       try {
-        const config = useRuntimeConfig();
-        const apiBase = config.public.apiBase as string;
-        const res = await $fetch<{ user: User; token: string }>(
-          `${apiBase}/login`,
-          {
-            method: 'POST',
-            body: { email, password }
-          }
-        );
+        const apiBase = useApiBase();
+        const res = await $fetch<{
+          user: Omit<User, 'is_admin'> & { is_admin?: boolean };
+          token: string;
+        }>(`${apiBase}/login`, {
+          method: 'POST',
+          body: { email, password }
+        });
         this.setAuth(res.user, res.token);
         return res;
       } finally {
@@ -77,15 +106,14 @@ export const useAuthStore = defineStore('auth', {
     ) {
       this.pending = true;
       try {
-        const config = useRuntimeConfig();
-        const apiBase = config.public.apiBase as string;
-        const res = await $fetch<{ user: User; token: string }>(
-          `${apiBase}/register`,
-          {
-            method: 'POST',
-            body: { name, email, password, password_confirmation }
-          }
-        );
+        const apiBase = useApiBase();
+        const res = await $fetch<{
+          user: Omit<User, 'is_admin'> & { is_admin?: boolean };
+          token: string;
+        }>(`${apiBase}/register`, {
+          method: 'POST',
+          body: { name, email, password, password_confirmation }
+        });
         this.setAuth(res.user, res.token);
         return res;
       } finally {
@@ -99,8 +127,7 @@ export const useAuthStore = defineStore('auth', {
         return;
       }
       try {
-        const config = useRuntimeConfig();
-        const apiBase = config.public.apiBase as string;
+        const apiBase = useApiBase();
         await $fetch(`${apiBase}/logout`, {
           method: 'POST',
           headers: {
