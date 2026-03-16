@@ -33,7 +33,11 @@ import {
 } from '~/composables/useMarkers';
 
 const props = defineProps<{
+  // Drives the sidebar list — current viewport / filtered results only
   markers: Marker[];
+  // Drives the map GL source — full accumulated cache since page load.
+  // Markers stay on the map even after panning away.
+  allMarkers: Marker[];
   focusMarkerId?: number | null;
 }>();
 
@@ -66,9 +70,6 @@ let suppressNextBoundsEmit = false;
 const htmlMarkers: Map<number, MapLibreMarker> = new Map();
 
 // ─── Throttle helper ──────────────────────────────────────────────────────────
-// Limits syncHtmlMarkers to at most once every `wait` ms even though
-// map.on('render') fires up to 60 times/sec. This keeps markers smooth
-// during panning without hammering queryRenderedFeatures every frame.
 function throttle<T extends (...args: any[]) => void>(fn: T, wait: number): T {
   let last = 0;
   let raf: ReturnType<typeof requestAnimationFrame> | null = null;
@@ -78,8 +79,6 @@ function throttle<T extends (...args: any[]) => void>(fn: T, wait: number): T {
       last = now;
       fn(...args);
     } else if (!raf) {
-      // Ensure a final call fires once the throttle window expires,
-      // so markers always end up correct after panning stops.
       raf = requestAnimationFrame(() => {
         raf = null;
         last = performance.now();
@@ -154,15 +153,15 @@ function emitBounds() {
 function addClusterLayers() {
   if (!map) return;
 
+  // Seed with whatever allMarkers already has (may be empty on first load)
   map.addSource(SOURCE_ID, {
     type: 'geojson',
-    data: markersToGeoJSON(props.markers),
+    data: markersToGeoJSON(props.allMarkers),
     cluster: true,
     clusterMaxZoom: 16,
     clusterRadius: 50
   });
 
-  // Cluster bubble
   map.addLayer({
     id: CLUSTER_LAYER_ID,
     type: 'circle',
@@ -184,7 +183,6 @@ function addClusterLayers() {
     }
   });
 
-  // Count label inside cluster
   map.addLayer({
     id: CLUSTER_COUNT_LAYER_ID,
     type: 'symbol',
@@ -195,13 +193,9 @@ function addClusterLayers() {
       'text-font': ['Open Sans Bold'],
       'text-size': 13
     },
-    paint: {
-      'text-color': '#ffffff'
-    }
+    paint: { 'text-color': '#ffffff' }
   });
 
-  // Invisible hit-test layer — radius must be > 0 so queryRenderedFeatures
-  // can detect clicks on individual marker positions.
   map.addLayer({
     id: UNCLUSTERED_LAYER_ID,
     type: 'circle',
@@ -214,7 +208,6 @@ function addClusterLayers() {
     }
   });
 
-  // Expand cluster on click
   map.on('click', CLUSTER_LAYER_ID, async (e) => {
     const features = map!.queryRenderedFeatures(e.point, {
       layers: [CLUSTER_LAYER_ID]
@@ -237,7 +230,6 @@ function addClusterLayers() {
     map!.getCanvas().style.cursor = '';
   });
 
-  // Throttled render: runs at most every 100ms instead of every frame (~60/sec)
   map.on('render', throttledSyncHtmlMarkers);
 }
 
@@ -258,17 +250,18 @@ function syncHtmlMarkers() {
     visibleIds.add(id);
 
     if (!htmlMarkers.has(id)) {
-      const marker = props.markers.find((m) => m.id === id);
+      // Look up in allMarkers so cached (off-viewport) markers still resolve
+      const marker = props.allMarkers.find((m) => m.id === id);
       if (!marker) continue;
 
       const color = getCategoryColor(marker.category);
       const el = createDotEl(color);
       const categoryLabel = formatCategoryLabel(marker.category);
       const description = truncatePopupText(marker.description ?? '', 90);
-
       const locationLine = marker.address
         ? `<br><small>${escapeHtml(marker.address)}</small>`
         : '';
+
       const popup = new maplibregl.Popup({ offset: 16 }).setHTML(
         `<strong>${escapeHtml(categoryLabel)}</strong><div style="margin-top:4px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;line-height:1.35;max-width:220px;">${escapeHtml(description)}</div>${locationLine}`
       );
@@ -280,8 +273,6 @@ function syncHtmlMarkers() {
         .setPopup(popup)
         .addTo(map!);
 
-      // stopPropagation prevents the click bubbling to the map canvas
-      // which would trigger mapClick → AddMarkerModal.
       el.addEventListener('click', (e) => {
         e.stopPropagation();
         emit('markerClick', marker);
@@ -291,7 +282,6 @@ function syncHtmlMarkers() {
     }
   }
 
-  // Remove markers that have moved into a cluster or scrolled off-screen
   for (const [id, m] of htmlMarkers) {
     if (!visibleIds.has(id)) {
       m.remove();
@@ -314,40 +304,33 @@ function escapeHtml(value: string): string {
     .replaceAll("'", '&#39;');
 }
 
-// Throttled version registered with map.on('render')
 const throttledSyncHtmlMarkers = throttle(syncHtmlMarkers, 100);
 
-// ─── Update GeoJSON data when props change ────────────────────────────────────
+// ─── Update GeoJSON source when allMarkers cache grows ────────────────────────
+// allMarkers is always additive — setData here never removes pins from the map.
 
 function updateSource() {
   if (!map) return;
   const source = map.getSource(SOURCE_ID) as any;
   if (!source) return;
-
-  for (const m of htmlMarkers.values()) m.remove();
-  htmlMarkers.clear();
-
-  source.setData(markersToGeoJSON(props.markers));
+  source.setData(markersToGeoJSON(props.allMarkers));
+  // Do NOT clear htmlMarkers — syncHtmlMarkers reconciles on the next render tick
 }
 
 // ─── Public actions ───────────────────────────────────────────────────────────
 
 function centerOnUserLocation() {
   if (!map) return;
-
   if (userLocation.value) {
     map.flyTo({ center: userLocation.value, zoom: 18, duration: 400 });
     return;
   }
-
   void requestUserLocation({ centerMap: true, silent: false });
 }
 
 async function getLocationPermissionState(): Promise<PermissionState | null> {
-  if (!('permissions' in navigator) || !navigator.permissions?.query) {
+  if (!('permissions' in navigator) || !navigator.permissions?.query)
     return null;
-  }
-
   try {
     const status = await navigator.permissions.query({
       name: 'geolocation'
@@ -364,7 +347,6 @@ function getLocationErrorMessage(
   if (permissionState === 'denied') {
     return 'Location access is blocked. Enable location for this site in your browser settings.';
   }
-
   return 'Unable to access your location. Please allow location permission and try again.';
 }
 
@@ -378,27 +360,21 @@ async function requestUserLocation(options?: {
     }
     return;
   }
-
-  if (!maplibregl || !map) {
-    return;
-  }
+  if (!maplibregl || !map) return;
 
   const permissionState = await getLocationPermissionState();
 
   navigator.geolocation.getCurrentPosition(
     (pos) => {
       if (!map || !maplibregl) return;
-
       const coords: [number, number] = [
         pos.coords.longitude,
         pos.coords.latitude
       ];
-
       userLocation.value = coords;
       if (options?.centerMap) {
         map.flyTo({ center: coords, zoom: 13, duration: 400 });
       }
-
       userMarker?.remove();
       userMarker = new maplibregl.Marker({ element: createUserEl() })
         .setLngLat(coords)
@@ -470,8 +446,9 @@ onUnmounted(() => {
   map = null;
 });
 
+// Watch allMarkers (the growing cache) — updates the GL source additively
 watch(
-  () => props.markers,
+  () => props.allMarkers,
   () => {
     if (map?.loaded()) updateSource();
   },
@@ -482,7 +459,8 @@ watch(
   () => props.focusMarkerId,
   (id) => {
     if (id == null) return;
-    const marker = props.markers.find((m) => m.id === id);
+    // Search allMarkers so focused markers work even when panned off-viewport
+    const marker = props.allMarkers.find((m) => m.id === id);
     if (marker) nextTick(() => focusOnMarker(marker));
   }
 );

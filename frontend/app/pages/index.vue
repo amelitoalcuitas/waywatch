@@ -9,10 +9,7 @@
           placeholder="All categories"
           class="min-w-[140px]"
         >
-          <!-- circle for color -->
-
           <template #item="{ item }">
-            <!-- vertical align the circle with the text -->
             <div class="flex items-center gap-2 w-full">
               <div
                 v-if="item.value !== 'all'"
@@ -20,7 +17,6 @@
                 :style="{ backgroundColor: getCategoryColor(item.value) }"
               ></div>
               <span v-else class="w-3 h-3"> </span>
-
               {{ item.label }}
             </div>
           </template>
@@ -32,6 +28,7 @@
       <div class="relative z-0 h-[50vh] shrink-0 overflow-hidden">
         <MapView
           :markers="markers"
+          :all-markers="allMarkers"
           :focus-marker-id="focusMarkerId"
           @bounds-change="onBoundsChange"
           @map-click="onMapClick"
@@ -44,44 +41,62 @@
       <div
         class="min-h-0 flex-1 overflow-auto border-t border-gray-200 bg-gray-50"
       >
+        <!-- First load: show full loading state -->
         <div v-if="pending" class="flex items-center justify-center p-8">
           <p class="text-gray-500">Loading markers...</p>
         </div>
-        <div
-          v-else-if="markers.length === 0"
-          class="flex items-center justify-center p-8"
-        >
-          <p class="text-gray-500">No markers in this area</p>
-        </div>
-        <ul v-else class="divide-y divide-gray-200">
-          <li
-            v-for="marker in markers"
-            :key="marker.id"
-            class="cursor-pointer bg-white px-4 py-3 hover:bg-gray-50"
-            @click="focusOnMarker(marker)"
+
+        <template v-else>
+          <!-- Subsequent fetches: subtle top bar so the list never disappears -->
+          <div
+            v-if="refreshing"
+            class="h-0.5 w-full bg-blue-100 overflow-hidden"
           >
-            <div class="flex items-center gap-3">
-              <span
-                class="inline-flex w-24 shrink-0 items-center justify-center rounded px-2 py-0.5 text-xs font-medium text-white"
-                :style="{ backgroundColor: getCategoryColor(marker.category) }"
-              >
-                {{ formatCategory(marker.category) }}
-              </span>
-              <div class="min-w-0 flex-1">
-                <p class="truncate text-sm text-gray-900">
-                  {{ marker.description }}
-                </p>
-                <p class="mt-1 text-xs text-gray-500">
-                  {{ marker.user?.name }} ·
-                  {{
-                    marker.address ||
-                    formatCoords(marker.latitude, marker.longitude)
-                  }}
-                </p>
+            <div
+              class="h-full bg-blue-400 animate-[slide_1.2s_ease-in-out_infinite]"
+              style="width: 40%"
+            />
+          </div>
+
+          <div
+            v-if="allMarkers.length === 0"
+            class="flex items-center justify-center p-8"
+          >
+            <p class="text-gray-500">No markers in this area</p>
+          </div>
+
+          <ul v-else class="divide-y divide-gray-200">
+            <li
+              v-for="marker in allMarkers"
+              :key="marker.id"
+              class="cursor-pointer bg-white px-4 py-3 hover:bg-gray-50"
+              @click="focusOnMarker(marker)"
+            >
+              <div class="flex items-center gap-3">
+                <span
+                  class="inline-flex w-24 shrink-0 items-center justify-center rounded px-2 py-0.5 text-xs font-medium text-white"
+                  :style="{
+                    backgroundColor: getCategoryColor(marker.category)
+                  }"
+                >
+                  {{ formatCategory(marker.category) }}
+                </span>
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-sm text-gray-900">
+                    {{ marker.description }}
+                  </p>
+                  <p class="mt-1 text-xs text-gray-500">
+                    {{ marker.user?.name }} ·
+                    {{
+                      marker.address ||
+                      formatCoords(marker.latitude, marker.longitude)
+                    }}
+                  </p>
+                </div>
               </div>
-            </div>
-          </li>
-        </ul>
+            </li>
+          </ul>
+        </template>
       </div>
 
       <AddMarkerModal
@@ -124,7 +139,7 @@ import type { Marker } from '~/composables/useMarkers';
 
 const store = useMarkersStore();
 const authStore = useAuthStore();
-const { markers, pending } = storeToRefs(store);
+const { markers, allMarkers, pending, refreshing } = storeToRefs(store);
 
 if (import.meta.client && !store.selectedDate) {
   store.setDate(formatDateForInput(new Date()));
@@ -261,19 +276,22 @@ function onMarkerClick(marker: Marker) {
 
 function onMarkerUpdated(updated: Marker) {
   const idx = store.markers.findIndex((m) => m.id === updated.id);
-  if (idx !== -1) {
-    store.markers[idx] = updated;
-  }
+  if (idx !== -1) store.markers[idx] = updated;
+
+  // Also update in allMarkers cache so the map popup reflects changes
+  const allIdx = store.allMarkers.findIndex((m) => m.id === updated.id);
+  if (allIdx !== -1) store.allMarkers[allIdx] = updated;
+
   selectedMarker.value = updated;
 }
 
 function onMarkerDeleted(markerId: number) {
   store.markers = store.markers.filter((m) => m.id !== markerId);
+  store.allMarkers = store.allMarkers.filter((m) => m.id !== markerId);
 
   if (selectedMarker.value?.id === markerId) {
     selectedMarker.value = null;
   }
-
   showDetailsModal.value = false;
 }
 
